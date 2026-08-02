@@ -245,7 +245,7 @@ do
                   tmhm = { "FLY" } }
   local known = { species = "FIXMON_A", moves = { { id = "FLY" } } }
   local learner = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
-  local ctx = { save = { party = { known, learner } },
+  local ctx = { save = { party = { known, learner }, inventory = {} },
                 data = { pokemon = { FIXFLYER = flyer } } }
   local vanilla = function() return nil end -- vanilla: badge gate fails
 
@@ -255,11 +255,15 @@ do
   bucket.badgeless_moves = false
 
   bucket.field_moves_all = true
+  T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), nil,
+    "FIELD MOVES ALL alone: the Thunder Badge gate still applies")
+  ctx.save.inventory.THUNDERBADGE = 1
   T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), known,
-    "FIELD MOVES ALL: the known mon wins")
+    "FIELD MOVES ALL: with the badge, the known mon wins")
   ctx.save.party = { learner }
   T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), learner,
-    "FIELD MOVES ALL: a learner counts without knowing FLY")
+    "FIELD MOVES ALL: with the badge, a learner counts without knowing FLY")
+  ctx.save.inventory.THUNDERBADGE = nil
   bucket.field_moves_all = false
   T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), nil,
     "toggles OFF: the vanilla (badge-blocked) answer stands")

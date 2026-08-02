@@ -411,16 +411,26 @@ return function(mod)
 
   -- FIELD MOVES ALL / BADGELESS MOVES at USE time: the surf mount, the cut
   -- and the hmBadges gate all go through partyKnows, which consults the
-  -- fieldmove.eligibility hook.  With either toggle on, a mon that knows
-  -- the move (or, with FIELD MOVES ALL, can learn it) counts even when the
-  -- badge is missing.
+  -- fieldmove.eligibility hook.  FIELD MOVES ALL unlocks the MOVE, not its
+  -- badge: the hmBadges gate still applies unless BADGELESS MOVES is on.
+  -- (Older engine builds have no list-time badge check in the party menu,
+  -- so this hook is the only thing standing between a badge-less player
+  -- and a free Surf/Cut on those builds.)
   mod.hooks:wrap("fieldmove.eligibility", function(next, moveId, ctx)
     local b = ctx and ctx.save
     if b and b.party
        and (get("badgeless_moves") or get("field_moves_all")) then
       local mon = mod.exports.eligibleMon(b.party, ctx.data, moveId,
                                           get("field_moves_all"))
-      if mon then return mon end
+      if mon then
+        if get("badgeless_moves") then return mon end
+        local gate = (require("src.world.FieldDefaults")
+                      .constant(ctx.data, "hmBadges") or {})[moveId]
+        local badge = gate and gate.badge
+        if not badge or (b.inventory and b.inventory[badge]) then
+          return mon
+        end
+      end
     end
     return next(moveId, ctx)
   end)

@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.2] - 2026-08-02
+
+### Fixed
+
+- FIELD MOVES ALL no longer bypasses badge gates at use time: on engine
+  builds without a list-time badge check in the party menu, a mon that
+  could learn Surf/Cut could use it without the badge or the HM.  The
+  fieldmove.eligibility wrap now applies the hmBadges gate itself
+  (FLY/CUT need their badge, SURF needs the Soul Badge, STRENGTH the
+  Rainbow Badge, FLASH the Boulder Badge) unless BADGELESS MOVES is on.
+
 ## [1.2.1] - 2026-08-02
 
 ### Fixed

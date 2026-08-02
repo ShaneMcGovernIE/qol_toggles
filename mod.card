@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> USEFUL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, and every learnable field move usable without knowing it.",
+  summary = "OPTIONS -> USEFUL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it, no badge gates, always-catch, perfect DVs, double EXP and instant flee.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -10,13 +10,18 @@ return {
       "a successful capture fully heals the Pokémon (HP, status, and all PP) whether it joins the party or goes to a PC box",
       "an INFINITE REPEL switch blocks all wild walking encounters while active",
       "a FIELD MOVES ALL switch lets every species that can learn a field move (level-up or TM/HM) use it out of battle even without knowing it; badge gates and context rules still apply",
+      "a BADGELESS MOVES switch drops the badge gates for FLY/SURF/CUT/STRENGTH/FLASH in the party menu and at use time",
+      "an ALWAYS CATCH switch makes every ball catch, Master Ball style",
+      "a PERFECT DVS switch maxes the DVs of every caught Pokémon",
+      "an EXP x2 switch doubles battle EXP",
+      "an INSTANT FLEE switch escapes wild battles on the first try",
     },
     added = {
-      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the four switches, persisted per save",
+      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the nine switches, persisted in options.lua",
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH and FIELD MOVES ALL ship ON; INFINITE REPEL ships OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH and FIELD MOVES ALL ship ON; the other six ship OFF.  Toggles persist in options.lua, independent of save files",
     },
   },
   credits = {},

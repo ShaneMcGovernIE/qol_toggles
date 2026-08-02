@@ -29,11 +29,22 @@ love .
   without the Thunder Badge, no SURF without the Soul Badge — and the
   usual context rules hold (FLY/TELEPORT only outdoors, FLASH only in
   the dark, DIG only on its tilesets).
+- **BADGELESS MOVES** — the badge gates come off: FLY, SURF, CUT,
+  STRENGTH and FLASH all work without their badges.  Pairs with FIELD
+  MOVES ALL for a no-badge, no-moveset run.
+- **ALWAYS CATCH** — every ball catches, Master Ball style (the ball is
+  still consumed).
+- **PERFECT DVS** — caught Pokémon get 15s across the board, the gen 1
+  maximum, with their stats recomputed to match.
+- **EXP x2** — double battle EXP; the "gained N EXP" text shows the
+  doubled amount.
+- **INSTANT FLEE** — wild battles always escape on the first try (RUN
+  menu and the faint dialogue's NO branch).
 
 ## Notes
 
 - Each switch is independent and stored with your preferences (options.lua),
-  so toggles survive restarts and save files.  Everything ships ON except
-  INFINITE REPEL, which ships OFF.
+  so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
+  CATCH and FIELD MOVES ALL ship ON; the rest ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.

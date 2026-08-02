@@ -41,17 +41,27 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 4, "four toggles in the submenu")
+T.eq(#rows, 9, "nine toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
 T.eq(rows[4].id, "field_moves_all", "toggle 4: learnable field moves")
+T.eq(rows[5].id, "badgeless_moves", "toggle 5: badgeless field moves")
+T.eq(rows[6].id, "always_catch", "toggle 6: always catch")
+T.eq(rows[7].id, "perfect_dvs", "toggle 7: perfect DVs")
+T.eq(rows[8].id, "exp_mult", "toggle 8: EXP x2")
+T.eq(rows[9].id, "instant_flee", "toggle 9: instant flee")
 
--- ship defaults: everything on except INFINITE REPEL
+-- ship defaults: everything on except INFINITE REPEL and the five new ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
 T.eq(ex.defaultFor("catch_heal"), true, "FULL HEAL CATCH ships ON")
 T.eq(ex.defaultFor("repel"), false, "INFINITE REPEL ships OFF")
 T.eq(ex.defaultFor("field_moves_all"), true, "FIELD MOVES ALL ships ON")
+T.eq(ex.defaultFor("badgeless_moves"), false, "BADGELESS MOVES ships OFF")
+T.eq(ex.defaultFor("always_catch"), false, "ALWAYS CATCH ships OFF")
+T.eq(ex.defaultFor("perfect_dvs"), false, "PERFECT DVS ships OFF")
+T.eq(ex.defaultFor("exp_mult"), false, "EXP x2 ships OFF")
+T.eq(ex.defaultFor("instant_flee"), false, "INSTANT FLEE ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -190,6 +200,125 @@ do
   ex.withPhantoms(pm, stubUpdate, 1/60)
   T.eq(#seen, 1, "submenu open: no phantom moves")
   pm.submenu = nil
+end
+
+-- ------------------------------------------------ BADGELESS MOVES
+
+do
+  local known = { species = "FIXMON_A", moves = { { id = "FLY" } } }
+  local pm = {
+    party = { known }, index = 1, battle = false, submenu = nil, tmhm = nil,
+    game = { data = { pokemon = {} }, save = { party = { known },
+                                               inventory = {} } },
+  }
+  local seenBadges
+  local function stubUpdate(self)
+    seenBadges = {}
+    for k in pairs(self.game.save.inventory) do seenBadges[#seenBadges + 1] = k end
+  end
+
+  bucket.badgeless_moves = true
+  ex.withPhantoms(pm, stubUpdate, 1/60)
+  T.eq(#seenBadges, 5, "all five HM badges are visible to the list builder")
+  local remaining = 0
+  for _ in pairs(pm.game.save.inventory) do remaining = remaining + 1 end
+  T.eq(remaining, 0, "injected badges are removed after the update")
+
+  pm.game.save.inventory.SOULBADGE = 1
+  ex.withPhantoms(pm, stubUpdate, 1/60)
+  T.eq(#seenBadges, 5, "an owned badge is kept, the other four injected")
+  T.eq(pm.game.save.inventory.SOULBADGE, 1, "the owned badge survives")
+  remaining = 0
+  for _ in pairs(pm.game.save.inventory) do remaining = remaining + 1 end
+  T.eq(remaining, 1, "only the owned badge remains after the update")
+  pm.game.save.inventory.SOULBADGE = nil
+
+  bucket.badgeless_moves = false
+  ex.withPhantoms(pm, stubUpdate, 1/60)
+  T.eq(#seenBadges, 0, "toggle OFF: no badge injection")
+end
+
+-- ------------------------------------------------ FIELDMOVE ELIGIBILITY
+
+do
+  local flyer = { learnset = { { level = 1, move = "FIX_TACKLE" } },
+                  tmhm = { "FLY" } }
+  local known = { species = "FIXMON_A", moves = { { id = "FLY" } } }
+  local learner = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
+  local ctx = { save = { party = { known, learner } },
+                data = { pokemon = { FIXFLYER = flyer } } }
+  local vanilla = function() return nil end -- vanilla: badge gate fails
+
+  bucket.badgeless_moves = true
+  T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), known,
+    "BADGELESS: a known FLY counts without the badge")
+  bucket.badgeless_moves = false
+
+  bucket.field_moves_all = true
+  T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), known,
+    "FIELD MOVES ALL: the known mon wins")
+  ctx.save.party = { learner }
+  T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), learner,
+    "FIELD MOVES ALL: a learner counts without knowing FLY")
+  bucket.field_moves_all = false
+  T.eq(Runtime.call("fieldmove.eligibility", vanilla, "FLY", ctx), nil,
+    "toggles OFF: the vanilla (badge-blocked) answer stands")
+end
+
+-- ------------------------------------------------ ALWAYS CATCH
+
+do
+  local Catching = require("src.battle.Catching")
+  local Pokemon = require("src.pokemon.Pokemon")
+  local mon = Pokemon.new(Data, "FIXMON_A", 5)
+  local def = Data.pokemon.FIXMON_A
+  local rng255 = function() return 255 end
+
+  bucket.always_catch = true
+  local caught, shakes = Catching.attempt("POKE_BALL", mon, def, rng255)
+  T.eq(caught, true, "ALWAYS CATCH: every ball catches")
+  T.eq(shakes, 3, "full three-shake chain")
+
+  bucket.always_catch = false
+  caught = Catching.attempt("POKE_BALL", mon, def, rng255)
+  T.eq(caught, false, "toggle OFF: the stock roll runs (255 roll > rate 45)")
+end
+
+-- ------------------------------------------------ PERFECT DVS
+
+do
+  local Pokemon = require("src.pokemon.Pokemon")
+  local mon = Pokemon.new(Data, "FIXMON_A", 10)
+  local oldMax = mon.stats.hp
+  ex.perfectDVs(mon, Data)
+  T.eq(mon.dvs.attack, 15, "attack DV maxed")
+  T.eq(mon.dvs.defense, 15, "defense DV maxed")
+  T.eq(mon.dvs.speed, 15, "speed DV maxed")
+  T.eq(mon.dvs.special, 15, "special DV maxed")
+  T.eq(mon.dvs.hp, 15, "hp DV derives to 15")
+  T.check(mon.stats.hp >= oldMax, "max DVs never lower max HP")
+end
+
+-- ------------------------------------------------ EXP x2
+
+do
+  local vanilla = function() return 100 end
+  bucket.exp_mult = true
+  T.eq(Runtime.call("exp.gain", vanilla, {}), 200, "EXP x2 doubles the gain")
+  bucket.exp_mult = false
+  T.eq(Runtime.call("exp.gain", vanilla, {}), 100, "toggle OFF passes through")
+end
+
+-- ------------------------------------------------ INSTANT FLEE
+
+do
+  local vanilla = function() return false end
+  bucket.instant_flee = true
+  T.eq(Runtime.call("battle.run", vanilla, {}), true,
+    "INSTANT FLEE always escapes")
+  bucket.instant_flee = false
+  T.eq(Runtime.call("battle.run", vanilla, {}), false,
+    "toggle OFF passes through")
 end
 
 -- ------------------------------------------------ INFINITE REPEL

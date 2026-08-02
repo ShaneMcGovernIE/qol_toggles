@@ -1,17 +1,26 @@
--- QoL Toggles: an OPTIONS -> TOGGLES submenu with three switches, each
--- persisted per save via mod.save:
+-- QoL Toggles: an OPTIONS -> USEFUL TOGGLES submenu with nine switches,
+-- each persisted in options.lua:
 --   POISON SAVE      a poisoned party member survives at 1 HP and its
 --                    poison subsides: "X's poison has subsided!"
 --   FULL HEAL CATCH  every captured Pokémon (party or PC) is fully
 --                    healed -- HP, status, and all PP
 --   INFINITE REPEL   no wild walking encounters (grass, surf, caves)
 --                    while the switch is on
+--   FIELD MOVES ALL  a species that can learn a field move (level-up or
+--                    TM/HM) gets the out-of-battle option without
+--                    knowing it
+--   BADGELESS MOVES  FLY/SURF/CUT/STRENGTH/FLASH work without their
+--                    badges (the list and the usage-time gates both)
+--   ALWAYS CATCH     every ball catches, Master Ball style
+--   PERFECT DVS      caught Pokémon get 15s across the board
+--   EXP x2           double battle EXP
+--   INSTANT FLEE     wild battles always escape on the first try
 --
 -- The submenu is a registry screen and the OPTIONS row joins through the
--- ui.options.rows hook.  The three behaviors hook engine seams:
---   OverworldState.applyFieldPoison is wrapped on game.ready
---   the pokemon.caught event heals the stored mon
---   the encounter.roll hook suppresses the wild roll
+-- ui.options.rows hook.  The behaviors hook engine seams: the poison tick
+-- (OverworldState.applyFieldPoison), the pokemon.caught event,
+-- encounter.roll, PartyMenu.update (phantom moves + badge injection),
+-- fieldmove.eligibility, Catching.attempt, exp.gain and battle.run.
 
 local Game = require("src.core.Game")
 
@@ -20,11 +29,20 @@ local TOGGLES = {
   { key = "catch_heal", label = "FULL HEAL CATCH", default = true },
   { key = "repel", label = "INFINITE REPEL", default = false },
   { key = "field_moves_all", label = "FIELD MOVES ALL", default = true },
+  { key = "badgeless_moves", label = "BADGELESS MOVES", default = false },
+  { key = "always_catch", label = "ALWAYS CATCH", default = false },
+  { key = "perfect_dvs", label = "PERFECT DVS", default = false },
+  { key = "exp_mult", label = "EXP x2", default = false },
+  { key = "instant_flee", label = "INSTANT FLEE", default = false },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list)
 local FIELD_MOVES = { "FLY", "FLASH", "CUT", "SURF", "STRENGTH",
                       "SOFTBOILED", "TELEPORT", "DIG" }
+
+-- the HM badges the party menu's list builder and hmBadges gate check
+local HM_BADGES = { "THUNDERBADGE", "BOULDERBADGE", "CASCADEBADGE",
+                    "SOULBADGE", "RAINBOWBADGE" }
 
 return function(mod)
   local Strings = require("src.core.Strings")
@@ -138,6 +156,39 @@ return function(mod)
     return mon.hp == mon.stats.hp and mon.status == nil
   end
 
+  -- max DVs on a caught mon: all 15s (hp DV derives to 15 too), stats
+  -- recomputed so the mon's actual stats match
+  mod.exports.perfectDVs = function(mon, data)
+    mon.dvs = { attack = 15, defense = 15, speed = 15, special = 15, hp = 15 }
+    local def = data and data.pokemon and data.pokemon[mon.species]
+    if def then
+      mon.stats = require("src.pokemon.Stats").calc(def, mon.level,
+                                                    mon.dvs, mon.statExp)
+    end
+    return mon.stats
+  end
+
+  -- a party member that counts as knowing a field move for the
+  -- fieldmove.eligibility gate: one that knows it, or -- with allMoves --
+  -- one whose species can learn it (level-up or TM/HM)
+  mod.exports.eligibleMon = function(party, data, moveId, allMoves)
+    for _, mon in ipairs(party) do
+      if mon and mon.moves then
+        for _, mv in ipairs(mon.moves) do
+          if mv.id == moveId then return mon end
+        end
+      end
+    end
+    if not allMoves then return nil end
+    for _, mon in ipairs(party) do
+      if mon and mon.moves then
+        local def = data and data.pokemon and data.pokemon[mon.species]
+        if def and canLearn(def, moveId) then return mon end
+      end
+    end
+    return nil
+  end
+
   -- the field moves this species can learn (level-up or TM/HM) but does
   -- not currently know
   mod.exports.learnableFieldMoves = function(def, mon)
@@ -179,21 +230,38 @@ return function(mod)
   -- Selection reads the action off the built item list, never the moveset,
   -- so the phantom slots leave no trace.
   mod.exports.withPhantoms = function(self, nextUpdate, dt)
-    if not get("field_moves_all") or self.battle or self.submenu
-       or self.tmhm then
+    if self.battle or self.submenu or self.tmhm then
+      return nextUpdate(self, dt)
+    end
+    local allMoves = get("field_moves_all")
+    local badgeless = get("badgeless_moves")
+    if not allMoves and not badgeless then
       return nextUpdate(self, dt)
     end
     local game = self.game
     local party = self.party or (game and game.save and game.save.party)
     local mon = party and party[self.index]
     local added
-    if mon and mon.moves and game and game.data
+    if allMoves and mon and mon.moves and game and game.data
        and game.data.pokemon[mon.species] then
       added = mod.exports.attachPhantomMoves(mon,
                                              game.data.pokemon[mon.species])
     end
+    -- BADGELESS: fake the HM badges for the list-time gates; the badges
+    -- never existed (or were already owned) are removed right after
+    local inv = badgeless and game and game.save and game.save.inventory
+    local injected = {}
+    if inv then
+      for _, badge in ipairs(HM_BADGES) do
+        if not inv[badge] then
+          inv[badge] = 1
+          injected[#injected + 1] = badge
+        end
+      end
+    end
     local ok, r1, r2 = pcall(nextUpdate, self, dt)
     if added and #added > 0 then mod.exports.detachPhantomMoves(mon, added) end
+    for _, badge in ipairs(injected) do inv[badge] = nil end
     if not ok then error(r1, 0) end
     return r1, r2
   end
@@ -317,11 +385,14 @@ return function(mod)
     end
   end)
 
-  -- FULL HEAL CATCH: storeCaughtMon places the mon (party or PC) before
-  -- emitting pokemon.caught, so healing the payload covers both
+  -- PERFECT DVS + FULL HEAL CATCH: storeCaughtMon places the mon (party or
+  -- PC) before emitting pokemon.caught, so mutating the payload covers
+  -- both.  DVs first (stats recomputed), then the heal reads the new max.
   mod.events:on("pokemon.caught", function(ev)
-    if not get("catch_heal") then return end
-    if ev and ev.mon then mod.exports.healCaught(ev.mon) end
+    if not (ev and ev.mon) then return end
+    local data = (ev.game and ev.game.data) or Game.data
+    if get("perfect_dvs") then mod.exports.perfectDVs(ev.mon, data) end
+    if get("catch_heal") then mod.exports.healCaught(ev.mon) end
   end)
 
   -- INFINITE REPEL: suppress every walking wild roll (grass, surf, caves);
@@ -329,6 +400,37 @@ return function(mod)
   mod.hooks:wrap("encounter.roll", function(next, encDef, ctx)
     if get("repel") then return nil end
     return next(encDef, ctx)
+  end)
+
+  -- FIELD MOVES ALL / BADGELESS MOVES at USE time: the surf mount, the cut
+  -- and the hmBadges gate all go through partyKnows, which consults the
+  -- fieldmove.eligibility hook.  With either toggle on, a mon that knows
+  -- the move (or, with FIELD MOVES ALL, can learn it) counts even when the
+  -- badge is missing.
+  mod.hooks:wrap("fieldmove.eligibility", function(next, moveId, ctx)
+    local b = ctx and ctx.save
+    if b and b.party
+       and (get("badgeless_moves") or get("field_moves_all")) then
+      local mon = mod.exports.eligibleMon(b.party, ctx.data, moveId,
+                                          get("field_moves_all"))
+      if mon then return mon end
+    end
+    return next(moveId, ctx)
+  end)
+
+  -- EXP x2: the engine's exp.gain hook returns the raw amount every
+  -- participant is paid; doubling it scales the announcement text too
+  mod.hooks:wrap("exp.gain", function(next, ctx)
+    local gained = next(ctx)
+    if get("exp_mult") then return gained * 2 end
+    return gained
+  end)
+
+  -- INSTANT FLEE: battle.run is the RUN menu + faint-dialogue escape roll
+  -- (runRoll); forcing true escapes on the first try
+  mod.hooks:wrap("battle.run", function(next, ctx)
+    if get("instant_flee") then return true end
+    return next(ctx)
   end)
 
   -- one wrap per session; hot reload re-runs entry chunks
@@ -339,5 +441,16 @@ return function(mod)
   local vanillaUpdate = PartyMenu.update
   PartyMenu.update = function(self, dt)
     return mod.exports.withPhantoms(self, vanillaUpdate, dt)
+  end
+
+  -- ALWAYS CATCH: every ball lands, Master Ball style -- caught with the
+  -- full three-shake chain so the ball anim plays out
+  local Catching = require("src.battle.Catching")
+  local vanillaAttempt = Catching.attempt
+  Catching.attempt = function(ball, targetMon, targetDef, rng, rateOverride,
+                              opts)
+    if get("always_catch") then return true, 3 end
+    return vanillaAttempt(ball, targetMon, targetDef, rng, rateOverride,
+                          opts)
   end
 end

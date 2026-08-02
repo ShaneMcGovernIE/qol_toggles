@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0] - 2026-08-02
+
+### Added
+
+- BADGELESS MOVES: FLY / SURF / CUT / STRENGTH / FLASH work without
+  their badges — the party-menu list and the use-time gates both (the
+  engine's own fieldmove.eligibility hook, which also lets FIELD MOVES
+  ALL surf-mount and cut trees with a mon that only can learn the move).
+- ALWAYS CATCH: every ball catches, Master Ball style (full three-shake
+  chain).
+- PERFECT DVS: caught Pokémon get 15s across the board; stats are
+  recomputed to match.
+- EXP x2: double battle EXP via the engine's exp.gain hook — the gain
+  text shows the doubled amount too.
+- INSTANT FLEE: wild battles always escape on the first try, via the
+  engine's battle.run hook (RUN menu and the faint dialogue's NO
+  branch).
+- All five ship OFF by default; the original four keep their defaults.
+
 ## [1.1.3] - 2026-08-02
 
 ### Changed

@@ -32,7 +32,8 @@ love .
 
 ## Notes
 
-- Each switch is independent and stored with the save file; a new game
-  starts with all four OFF.
+- Each switch is independent and stored with your preferences (options.lua),
+  so toggles survive restarts and save files.  Everything ships ON except
+  INFINITE REPEL, which ships OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.

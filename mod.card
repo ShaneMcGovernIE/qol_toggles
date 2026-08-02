@@ -16,7 +16,7 @@ return {
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "toggles are per-save: a new game starts with all four OFF",
+      "POISON SAVE, FULL HEAL CATCH and FIELD MOVES ALL ship ON; INFINITE REPEL ships OFF.  Toggles persist in options.lua, independent of save files",
     },
   },
   credits = {},

@@ -46,16 +46,24 @@ T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
 T.eq(rows[4].id, "field_moves_all", "toggle 4: learnable field moves")
-T.eq(ex.enabledCount(function(k) return state[k] end), 0, "all default OFF")
+
+-- ship defaults: everything on except INFINITE REPEL
+T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
+T.eq(ex.defaultFor("catch_heal"), true, "FULL HEAL CATCH ships ON")
+T.eq(ex.defaultFor("repel"), false, "INFINITE REPEL ships OFF")
+T.eq(ex.defaultFor("field_moves_all"), true, "FIELD MOVES ALL ships ON")
+T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
+
+T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
 
 for i, r in ipairs(rows) do
-  T.eq(r.value(), "OFF", "row " .. i .. " defaults OFF")
+  T.eq(r.value(), "OFF", "row " .. i .. " defaults OFF in a bare stub state")
   T.eq(r.step(), true, "row " .. i .. " steps")
   T.eq(r.value(), "ON", "row " .. i .. " shows ON after the step")
   T.eq(r.step(), true, "row " .. i .. " steps back")
   T.eq(r.value(), "OFF", "row " .. i .. " shows OFF again")
 end
-T.eq(ex.enabledCount(function(k) return state[k] end), 0, "all OFF again")
+T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state empty again")
 
 -- ------------------------------------------------ POISON SAVE
 

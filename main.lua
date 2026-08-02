@@ -16,10 +16,10 @@
 local Game = require("src.core.Game")
 
 local TOGGLES = {
-  { key = "poison_save", label = "POISON SAVE" },
-  { key = "catch_heal", label = "FULL HEAL CATCH" },
-  { key = "repel", label = "INFINITE REPEL" },
-  { key = "field_moves_all", label = "FIELD MOVES ALL" },
+  { key = "poison_save", label = "POISON SAVE", default = true },
+  { key = "catch_heal", label = "FULL HEAL CATCH", default = true },
+  { key = "repel", label = "INFINITE REPEL", default = false },
+  { key = "field_moves_all", label = "FIELD MOVES ALL", default = true },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list)
@@ -35,11 +35,21 @@ return function(mod)
   -- replace the save's modData outright, which silently discarded toggles
   -- set from the title screen, and an unsaved session lost them on quit.
   -- options.lua survives both, so a toggle flips once and stays flipped.
+  -- the stored value for a key, falling back to the per-toggle default:
+  -- everything except INFINITE REPEL ships ON
+  mod.exports.defaultFor = function(key)
+    for _, spec in ipairs(TOGGLES) do
+      if spec.key == key then return spec.default ~= false end
+    end
+    return false
+  end
+
   local function get(key)
     local loader = Game.mods
     local bucket = loader and loader.modOptions and loader.modOptions[mod.id]
     local v = bucket and bucket[key]
-    return v == nil and false or v
+    if v ~= nil then return v end
+    return mod.exports.defaultFor(key)
   end
 
   local function set(key, value)

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3] - 2026-08-02
+
+### Changed
+
+- POISON SAVE, FULL HEAL CATCH and FIELD MOVES ALL now ship ON by default;
+  INFINITE REPEL still ships OFF.  A stored toggle always wins over the
+  default, so existing settings are untouched.
+
 ## [1.1.2] - 2026-08-02
 
 ### Fixed

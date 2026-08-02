@@ -34,6 +34,7 @@ local TOGGLES = {
   { key = "perfect_dvs", label = "PERFECT DVS", default = false },
   { key = "exp_mult", label = "EXP x2", default = false },
   { key = "instant_flee", label = "INSTANT FLEE", default = false },
+  { key = "heal_map_change", label = "HEAL ON MAP CHANGE", default = false },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list)
@@ -154,6 +155,14 @@ return function(mod)
   mod.exports.healCaught = function(mon)
     require("src.pokemon.Pokemon").heal(mon)
     return mon.hp == mon.stats.hp and mon.status == nil
+  end
+
+  -- full heal + PP restore for the whole party (HEAL ON MAP CHANGE)
+  mod.exports.healParty = function(party)
+    local Pokemon = require("src.pokemon.Pokemon")
+    for _, mon in ipairs(party or {}) do
+      if mon then Pokemon.heal(mon) end
+    end
   end
 
   -- max DVs on a caught mon: all 15s (hp DV derives to 15 too), stats
@@ -382,6 +391,23 @@ return function(mod)
       end
       showNext()
       return true
+    end
+  end)
+
+  -- HEAL ON MAP CHANGE: every setMap (warps, caves, route seams, boot)
+  -- fully heals the party -- HP, status, and all PP
+  mod.events:on("game.ready", function()
+    local OverworldState = require("src.world.OverworldController")
+    if OverworldState._qolTogglesHealMapInstalled then return end
+    OverworldState._qolTogglesHealMapInstalled = true
+
+    local vanillaSetMap = OverworldState.setMap
+    OverworldState.setMap = function(self, mapId, x, y, facing, opts)
+      local result = vanillaSetMap(self, mapId, x, y, facing, opts)
+      if get("heal_map_change") and Game.save then
+        mod.exports.healParty(Game.save.party)
+      end
+      return result
     end
   end)
 

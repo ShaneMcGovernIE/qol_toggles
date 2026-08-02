@@ -41,7 +41,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 9, "nine toggles in the submenu")
+T.eq(#rows, 10, "ten toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -51,8 +51,9 @@ T.eq(rows[6].id, "always_catch", "toggle 6: always catch")
 T.eq(rows[7].id, "perfect_dvs", "toggle 7: perfect DVs")
 T.eq(rows[8].id, "exp_mult", "toggle 8: EXP x2")
 T.eq(rows[9].id, "instant_flee", "toggle 9: instant flee")
+T.eq(rows[10].id, "heal_map_change", "toggle 10: heal on map change")
 
--- ship defaults: everything on except INFINITE REPEL and the five new ones
+-- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
 T.eq(ex.defaultFor("catch_heal"), true, "FULL HEAL CATCH ships ON")
 T.eq(ex.defaultFor("repel"), false, "INFINITE REPEL ships OFF")
@@ -62,6 +63,7 @@ T.eq(ex.defaultFor("always_catch"), false, "ALWAYS CATCH ships OFF")
 T.eq(ex.defaultFor("perfect_dvs"), false, "PERFECT DVS ships OFF")
 T.eq(ex.defaultFor("exp_mult"), false, "EXP x2 ships OFF")
 T.eq(ex.defaultFor("instant_flee"), false, "INSTANT FLEE ships OFF")
+T.eq(ex.defaultFor("heal_map_change"), false, "HEAL ON MAP CHANGE ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -323,6 +325,28 @@ do
   bucket.instant_flee = false
   T.eq(Runtime.call("battle.run", vanilla, {}), false,
     "toggle OFF passes through")
+end
+
+-- ------------------------------------------------ HEAL ON MAP CHANGE
+
+do
+  local Pokemon = require("src.pokemon.Pokemon")
+  local a = Pokemon.new(Data, "FIXMON_A", 10)
+  local b = Pokemon.new(Data, "FIXMON_B", 10)
+  a.hp = 1
+  a.status = "PSN"
+  a.moves[1].pp = 0
+  b.hp = 3
+  b.status = "BRN"
+  b.moves[1].pp = 0
+  ex.healParty({ a, b })
+  T.eq(a.hp, a.stats.hp, "map-change heal restores HP to max")
+  T.eq(a.status, nil, "map-change heal clears status")
+  T.eq(a.moves[1].pp, Data.moves[a.moves[1].id].pp, "map-change heal restores PP")
+  T.eq(b.hp, b.stats.hp, "a second mon heals too")
+  T.eq(b.moves[1].pp, Data.moves[b.moves[1].id].pp, "second mon PP restored")
+  ex.healParty(nil)
+  ex.healParty({})
 end
 
 -- ------------------------------------------------ INFINITE REPEL

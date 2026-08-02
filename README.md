@@ -40,6 +40,9 @@ love .
   doubled amount.
 - **INSTANT FLEE** — wild battles always escape on the first try (RUN
   menu and the faint dialogue's NO branch).
+- **HEAL ON MAP CHANGE** — every map transition (routes, caves, warps,
+  connections, even boot) fully heals the party: HP, status, and all
+  PP.
 
 ## Notes
 

@@ -15,13 +15,14 @@ return {
       "a PERFECT DVS switch maxes the DVs of every caught Pokémon",
       "an EXP x2 switch doubles battle EXP",
       "an INSTANT FLEE switch escapes wild battles on the first try",
+      "a HEAL ON MAP CHANGE switch fully heals the party (HP, status, PP) on every map transition",
     },
     added = {
-      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the nine switches, persisted in options.lua",
+      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the ten switches, persisted in options.lua",
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH and FIELD MOVES ALL ship ON; the other six ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH and FIELD MOVES ALL ship ON; the other seven ship OFF.  Toggles persist in options.lua, independent of save files",
     },
   },
   credits = {},

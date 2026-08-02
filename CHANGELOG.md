@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0] - 2026-08-02
+
+### Added
+
+- HEAL ON MAP CHANGE: every map transition (routes, caves, warps,
+  connections, boot) fully heals the party — HP, status, and all PP.
+  Ships OFF.
+
 ## [1.2.2] - 2026-08-02
 
 ### Fixed

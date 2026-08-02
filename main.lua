@@ -396,10 +396,17 @@ return function(mod)
   end)
 
   -- INFINITE REPEL: suppress every walking wild roll (grass, surf, caves);
-  -- fishing keeps its own encounter.fishing path, like the Repel item
+  -- fishing keeps its own encounter.fishing path, like the Repel item.
+  -- Defensive: a downstream roll that throws (e.g. another mod's patch
+  -- left a map's water/grass def without a rate) degrades to "no
+  -- encounter" instead of blue-screening the game mid-step.
   mod.hooks:wrap("encounter.roll", function(next, encDef, ctx)
     if get("repel") then return nil end
-    return next(encDef, ctx)
+    local ok, enc = pcall(next, encDef, ctx)
+    if ok then return enc end
+    mod.log.warn("encounter.roll failed (%s); suppressing the roll",
+                 tostring(enc))
+    return nil
   end)
 
   -- FIELD MOVES ALL / BADGELESS MOVES at USE time: the surf mount, the cut

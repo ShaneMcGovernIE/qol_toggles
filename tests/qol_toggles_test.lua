@@ -332,6 +332,17 @@ do
   local enc = Runtime.call("encounter.roll", vanilla, nil, nil)
   T.neq(enc, nil, "repel OFF lets the roll through")
   T.eq(enc.species, "FIXMON_A", "the vanilla roll result is passed through")
+
+  -- defensive: a downstream roll that throws (another mod's rate-less
+  -- water/grass def) degrades to nil instead of blue-screening the step
+  local ok, threw = pcall(function()
+    Runtime.call("encounter.roll", function() error("nil rate") end,
+                 nil, nil)
+  end)
+  T.eq(ok, true, "a throwing roll never reaches the caller")
+  local suppressed = Runtime.call("encounter.roll",
+    function() error("nil rate") end, nil, nil)
+  T.eq(suppressed, nil, "the failed roll suppresses to no encounter")
 end
 
 run.release()

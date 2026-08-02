@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.1] - 2026-08-02
+
+### Fixed
+
+- Blue screen on Route 13 while surfing: another mod's encounter patch
+  can leave a map's water/grass def without a `rate`, which crashed the
+  encounter roll mid-step.  The encounter.roll wrap now degrades a
+  throwing roll to "no encounter" (logged) instead of crashing the game.
+
 ## [1.2.0] - 2026-08-02
 
 ### Added

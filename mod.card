@@ -1,0 +1,24 @@
+-- Sharing metadata.  Read by tooling and the manager detail pane; never by
+-- the loader's merge.
+return {
+  summary = "OPTIONS -> USEFUL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, and every learnable field move usable without knowing it.",
+  author = "Shane",
+  tags = { "quality-of-life", "options", "toggles" },
+  differences = {
+    changed = {
+      "poisoned party members no longer faint from out-of-battle poison damage at 1 HP; their poison subsides with \"X's poison has subsided!\"",
+      "a successful capture fully heals the Pokémon (HP, status, and all PP) whether it joins the party or goes to a PC box",
+      "an INFINITE REPEL switch blocks all wild walking encounters while active",
+      "a FIELD MOVES ALL switch lets every species that can learn a field move (level-up or TM/HM) use it out of battle even without knowing it; badge gates and context rules still apply",
+    },
+    added = {
+      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the four switches, persisted per save",
+    },
+    known = {
+      "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
+      "toggles are per-save: a new game starts with all four OFF",
+    },
+  },
+  credits = {},
+  compat = { engine = ">=0.1.53 <2.0.0", modApi = 2 },
+}

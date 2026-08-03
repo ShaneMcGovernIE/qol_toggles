@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.4.1] - 2026-08-03
+
+### Fixed
+
+- Using an Ether, Max Ether or PP Up on a Pokémon no longer crashes the
+  game when FIELD MOVES ALL is on: phantom field-move slots were being
+  attached to the target picker's moveset, and the "Which move?" list
+  tripped on their missing PP (blue screen, BagMenu "number expected,
+  got nil").  Target pickers are now exempt from phantom moves and badge
+  injection.
+
 ## [1.4.0] - 2026-08-02
 
 ### Added

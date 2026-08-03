@@ -206,6 +206,38 @@ do
   pm.submenu = nil
 end
 
+do
+  -- item/script target picker (ether, PP UP, ...): onSwitch reads
+  -- mon.moves directly and formats mv.pp, so phantom slots must never
+  -- attach -- BagMenu.lua:366 would crash on their nil pp
+  local flyer = { learnset = { { level = 1, move = "FIX_TACKLE" } },
+                  tmhm = { "FLY", "DIG" } }
+  local mon = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
+  local pm = {
+    party = { mon }, index = 1, battle = false, submenu = nil, tmhm = nil,
+    pickOnly = true,
+    game = { data = { pokemon = { FIXFLYER = flyer } },
+             save = { inventory = {} } },
+  }
+  local seen
+  local function stubUpdate(self)
+    seen = {}
+    for _, mv in ipairs(self.party[1].moves) do seen[#seen + 1] = mv.id end
+  end
+
+  bucket.field_moves_all = true
+  bucket.badgeless_moves = true
+  ex.withPhantoms(pm, stubUpdate, 1/60)
+  T.eq(#seen, 1, "picker open: no phantom moves on the chosen mon")
+  T.eq(seen[1], "FIX_TACKLE", "only the real move is visible to the picker")
+  T.eq(#mon.moves, 1, "the moveset is untouched after the update")
+  local remaining = 0
+  for _ in pairs(pm.game.save.inventory) do remaining = remaining + 1 end
+  T.eq(remaining, 0, "picker open: no badge injection")
+  bucket.field_moves_all = false
+  bucket.badgeless_moves = false
+end
+
 -- ------------------------------------------------ BADGELESS MOVES
 
 do

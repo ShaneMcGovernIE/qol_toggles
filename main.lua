@@ -240,7 +240,10 @@ return function(mod)
   -- Selection reads the action off the built item list, never the moveset,
   -- so the phantom slots leave no trace.
   mod.exports.withPhantoms = function(self, nextUpdate, dt)
-    if self.battle or self.submenu or self.tmhm then
+    -- pickOnly: the menu is an item/script target picker (ether, TM teach,
+    -- ...) whose onSwitch reads mon.moves directly -- phantom slots have no
+    -- pp and would crash BagMenu's move list
+    if self.battle or self.submenu or self.tmhm or self.pickOnly then
       return nextUpdate(self, dt)
     end
     local allMoves = get("field_moves_all")

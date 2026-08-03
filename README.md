@@ -43,6 +43,10 @@ love .
 - **HEAL ON MAP CHANGE** — every map transition (routes, caves, warps,
   connections, even boot) fully heals the party: HP, status, and all
   PP.
+- **QUICK S.S. ANNE** — the Vermilion dock sailor prompts for your
+  ticket once; after that you walk straight onto the ship with no
+  dialogue and no stop.  The ship-sailed guard and the no-ticket
+  walk-back still apply.
 
 ## Notes
 

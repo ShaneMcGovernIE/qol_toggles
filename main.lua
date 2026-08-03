@@ -35,6 +35,7 @@ local TOGGLES = {
   { key = "exp_mult", label = "EXP x2", default = false },
   { key = "instant_flee", label = "INSTANT FLEE", default = false },
   { key = "heal_map_change", label = "HEAL ON MAP CHANGE", default = false },
+  { key = "quick_ssanne", label = "QUICK S.S. ANNE", default = false },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list)
@@ -278,6 +279,28 @@ return function(mod)
   -- one wrap per session; hot reload re-runs entry chunks
   if Game._qolTogglesInstalled then return end
   Game._qolTogglesInstalled = true
+
+  -- QUICK S.S. ANNE: the Vermilion dock sailor (data/scripts/story.lua
+  -- onStep, gangway cell 18,30) prompts for the ticket once; every later
+  -- pass walks straight through with no dialogue.  The compose chain runs
+  -- mod onStep handlers before the base, so returning true consumes the
+  -- step silently.  The ship-left guard and the no-ticket walk-back stay
+  -- vanilla (there is nothing to board / no ticket to show).
+  mod.content.map_scripts:register("VERMILION_CITY", {
+    onStep = function(game, ow, x, y)
+      if not get("quick_ssanne") then return false end
+      if x ~= 18 or y ~= 30 or not ow or not ow.player
+         or ow.player.facing ~= "down" then
+        return false
+      end
+      if require("src.script.Flags").get(game.save, "EVENT_SS_ANNE_LEFT") then
+        return false
+      end
+      if get("ssanne_prompted") then return true end
+      set("ssanne_prompted", true)
+      return false -- one vanilla prompt, then straight through
+    end,
+  })
 
   -- ------------------------------------------------------- the OPTIONS row
 

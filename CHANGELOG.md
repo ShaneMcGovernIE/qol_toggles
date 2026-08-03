@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0] - 2026-08-02
+
+### Added
+
+- QUICK S.S. ANNE: the Vermilion dock sailor prompts for the ticket once;
+  every later pass onto the gangway walks straight through with no
+  dialogue and no stop.  The ship-left guard and the no-ticket walk-back
+  stay vanilla.  Ships OFF.
+
 ## [1.3.0] - 2026-08-02
 
 ### Added

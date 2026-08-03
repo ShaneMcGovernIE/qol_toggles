@@ -41,7 +41,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 10, "ten toggles in the submenu")
+T.eq(#rows, 11, "eleven toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -52,6 +52,7 @@ T.eq(rows[7].id, "perfect_dvs", "toggle 7: perfect DVs")
 T.eq(rows[8].id, "exp_mult", "toggle 8: EXP x2")
 T.eq(rows[9].id, "instant_flee", "toggle 9: instant flee")
 T.eq(rows[10].id, "heal_map_change", "toggle 10: heal on map change")
+T.eq(rows[11].id, "quick_ssanne", "toggle 11: quick S.S. Anne")
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
@@ -64,6 +65,7 @@ T.eq(ex.defaultFor("perfect_dvs"), false, "PERFECT DVS ships OFF")
 T.eq(ex.defaultFor("exp_mult"), false, "EXP x2 ships OFF")
 T.eq(ex.defaultFor("instant_flee"), false, "INSTANT FLEE ships OFF")
 T.eq(ex.defaultFor("heal_map_change"), false, "HEAL ON MAP CHANGE ships OFF")
+T.eq(ex.defaultFor("quick_ssanne"), false, "QUICK S.S. ANNE ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -347,6 +349,58 @@ do
   T.eq(b.moves[1].pp, Data.moves[b.moves[1].id].pp, "second mon PP restored")
   ex.healParty(nil)
   ex.healParty({})
+end
+
+-- ------------------------------------------------ QUICK S.S. ANNE
+
+do
+  local MapScripts = require("src.script.MapScripts")
+  require("data.scripts.init")
+  local view = MapScripts.get("VERMILION_CITY")
+  T.check(type(view and view.onStep) == "function",
+    "the merged Vermilion script has an onStep")
+
+  local pushed = 0
+  local stack = { states = {} }
+  function stack:push(s) pushed = pushed + 1 end
+  local game = {
+    data = Data,
+    save = { flags = {}, inventory = { S_S_TICKET = 1 } },
+    stack = stack,
+  }
+  local ow = { player = { facing = "down" }, scriptMove = function() end }
+
+  bucket.quick_ssanne = false
+  pushed = 0
+  view.onStep(game, ow, 18, 30)
+  T.check(pushed > 0, "toggle OFF: the ticket prompt still runs")
+
+  bucket.quick_ssanne = true
+  bucket.ssanne_prompted = nil
+  pushed = 0
+  view.onStep(game, ow, 18, 30)
+  T.check(pushed > 0, "first pass: the prompt shows once")
+  T.eq(bucket.ssanne_prompted, true, "first pass: the prompted flag is stored")
+
+  pushed = 0
+  local r2 = view.onStep(game, ow, 18, 30)
+  T.eq(r2, true, "later passes: the step is consumed")
+  T.eq(pushed, 0, "later passes: no dialogue, no stop")
+
+  game.save.flags.EVENT_SS_ANNE_LEFT = true
+  pushed = 0
+  view.onStep(game, ow, 18, 30)
+  T.check(pushed > 0, "ship left: the set-sail guard still runs")
+  game.save.flags.EVENT_SS_ANNE_LEFT = nil
+
+  pushed = 0
+  view.onStep(game, ow, 5, 5)
+  T.eq(pushed, 0, "other cells are untouched")
+  ow.player.facing = "up"
+  pushed = 0
+  view.onStep(game, ow, 18, 30)
+  T.eq(pushed, 0, "facing up is untouched")
+  ow.player.facing = "down"
 end
 
 -- ------------------------------------------------ INFINITE REPEL

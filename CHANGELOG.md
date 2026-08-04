@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0] - 2026-08-04
+
+### Added
+
+- POKEBALL BONUS: a toggle that, when ON, earns a free GREAT BALL every
+  time you buy your tenth POKé BALL at any mart — in one purchase or
+  across several, since the counter is cumulative and stored with the
+  save.  The clerk announces it: "Thanks for your support, please take
+  this free Great Ball."  Only balls actually bought count (Oak's five
+  starter balls and found balls never do, because the bonus keys off the
+  mart's BUY screen).  Ships OFF.
+
 ## [1.10.0] - 2026-08-04
 
 ### Added

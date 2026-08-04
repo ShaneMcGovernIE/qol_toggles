@@ -41,7 +41,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 17, "seventeen toggles in the submenu")
+T.eq(#rows, 18, "eighteen toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -59,6 +59,7 @@ T.eq(rows[14].id, "remember_cursor", "toggle 14: remember battle cursor")
 T.eq(rows[15].id, "heal_map_change", "toggle 15: heal on map change")
 T.eq(rows[16].id, "quick_ssanne", "toggle 16: quick S.S. Anne")
 T.eq(rows[17].id, "last_item", "toggle 17: last item in battle")
+T.eq(rows[18].id, "free_great_ball", "toggle 18: free Great Ball bonus")
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
@@ -78,6 +79,7 @@ T.eq(ex.defaultFor("remember_cursor"), true, "REMEMBER CURSOR ships ON")
 T.eq(ex.defaultFor("heal_map_change"), false, "HEAL ON MAP CHANGE ships OFF")
 T.eq(ex.defaultFor("quick_ssanne"), false, "QUICK S.S. ANNE ships OFF")
 T.eq(ex.defaultFor("last_item"), false, "LAST ITEM (M) ships OFF")
+T.eq(ex.defaultFor("free_great_ball"), false, "POKEBALL BONUS ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -810,6 +812,79 @@ do
   ex.setLastItem(nil)
 end
 
+-- ------------------------------------------------ POKEBALL BONUS
+
+-- pure math: one free GREAT BALL per ten POKé BALLS, cumulative
+T.eq(ex.bonusBalls(0, 10), 1, "a single 10-ball buy unlocks one ball")
+T.eq(ex.bonusBalls(0, 20), 2, "a 20-ball buy unlocks two")
+T.eq(ex.bonusBalls(9, 1), 1, "a 10th cumulative ball unlocks the first")
+T.eq(ex.bonusBalls(10, 1), 0, "the 11th ball is not a new ten")
+T.eq(ex.bonusBalls(19, 1), 1, "the 20th cumulative ball unlocks the second")
+T.eq(ex.bonusBalls(0, 0), 0, "a zero buy unlocks nothing")
+T.eq(ex.bonusBalls(5, 0), 0, "an empty qty unlocks nothing")
+
+-- the clerk's announcement is the requested free-ball message
+T.eq(ex.bonusMessage(),
+     "Thanks for your\nsupport,\vplease take\nthis free\vGreat Ball!",
+     "the free Great Ball message reads as asked")
+
+-- the live Bag.add wrap: buying 10 POKé BALLS while the mart's BUY list
+-- is open grants a GREAT BALL, persists the cumulative count in the
+-- slot's modData, and queues the clerk's message
+do
+  local Bag = require("src.inventory.Bag")
+  local pushed = {}
+  local save = { inventory = {}, money = 5000, bagOrder = {} }
+  Game.save = save
+  Game.stack = { push = function(_, s) pushed[#pushed + 1] = s end }
+  run.loader.modSave = run.loader.modSave or {}
+  run.loader.modOptions = run.loader.modOptions or {}
+  run.loader.modOptions.qol_toggles = run.loader.modOptions.qol_toggles or {}
+  run.loader.modOptions.qol_toggles.free_great_ball = true
+  ex.setMartBuyOpen(true)
+
+  T.eq(Bag.add(save, "POKE_BALL", 10, Data), true, "the ball buy lands")
+  T.eq(save.inventory.POKE_BALL, 10, "ten POKé BALLS in the bag")
+  T.eq(save.inventory.GREAT_BALL, 1, "one free GREAT BALL is granted")
+  T.eq(run.loader.modSave.qol_toggles.pokeballs_bought, 10,
+       "the cumulative count is stored in the slot's modData")
+  T.eq(#pushed, 1, "the clerk's message is queued")
+  T.neq(pushed[1].pages, nil, "the pushed state is a real TextBox")
+
+  -- a second 5-ball buy does not cross a ten boundary
+  Bag.add(save, "POKE_BALL", 5, Data)
+  T.eq(save.inventory.GREAT_BALL, 1, "five more balls earn nothing yet")
+  T.eq(run.loader.modSave.qol_toggles.pokeballs_bought, 15,
+       "the count keeps accumulating")
+  T.eq(#pushed, 1, "no second message below the boundary")
+
+  -- the 5th more (cumulative 20) earns the second ball and its message
+  Bag.add(save, "POKE_BALL", 5, Data)
+  T.eq(save.inventory.GREAT_BALL, 2, "cumulative twenty unlocks the second")
+  T.eq(#pushed, 2, "a second purchase on a boundary announces again")
+
+  -- balls that are not bought never count: with the buy window closed the
+  -- wrap is inert even for POKé BALLS
+  ex.setMartBuyOpen(false)
+  Bag.add(save, "POKE_BALL", 10, Data)
+  T.eq(run.loader.modSave.qol_toggles.pokeballs_bought, 20,
+       "a non-mart ball add is not counted")
+  T.eq(save.inventory.GREAT_BALL, 2, "no bonus outside the buy window")
+
+  -- a full bag blocks the buy, so nothing is counted or granted
+  ex.setMartBuyOpen(true)
+  local full = { inventory = {}, money = 5000, bagOrder = {} }
+  Game.save = full
+  for i = 1, 20 do full.inventory["ITEM_" .. i] = 1 end
+  T.eq(Bag.add(full, "POKE_BALL", 10, Data), false,
+       "a full bag refuses the buy")
+  T.eq(full.inventory.GREAT_BALL, nil, "a failed buy earns no bonus")
+  T.eq(run.loader.modSave.qol_toggles.pokeballs_bought, 20,
+       "a failed buy is not counted")
+  Game.save = nil
+  Game.stack = nil
+end
+
 -- ------- the label ticker for overflowing rows
 
 -- pure offset math: hold at each end, 16px/s between (the MoveRelearn
@@ -873,7 +948,7 @@ for _, spec in ipairs({ -- the ids are stable, from the TOGGLES list
   "badgeless_moves", "hm_item_required", "unlimited_tms",
   "forgettable_hms", "always_catch", "perfect_dvs", "exp_mult",
   "catch_exp", "instant_flee", "remember_cursor", "heal_map_change",
-  "quick_ssanne", "last_item",
+  "quick_ssanne", "last_item", "free_great_ball",
 }) do
   local help = ex.helpFor(spec)
   T.check(type(help) == "string" and #help > 0,

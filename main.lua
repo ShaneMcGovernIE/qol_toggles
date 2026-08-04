@@ -28,6 +28,8 @@
 --                    was last turn; OFF restores the fresh-FIGHT default
 --   LAST ITEM (M)    in battle, M uses the last item used from the bag:
 --                    balls throw at the foe, healing asks which mon
+--   POKEBALL BONUS   buying 10 POKé BALLS at any mart gets you a free
+--                    GREAT BALL
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -42,7 +44,8 @@
 -- (OverworldState.applyFieldPoison), the pokemon.caught event,
 -- encounter.roll, PartyMenu.update (phantom moves + badge injection),
 -- fieldmove.eligibility, Catching.attempt, exp.gain, battle.run,
--- BattleState.update and ItemEffects.use.
+-- BattleState.update, ItemEffects.use, ShopMenu.new/ListMenu.new (the
+-- POKEBALL BONUS buy window) and Bag.add (the bonus grant).
 
 local Game = require("src.core.Game")
 
@@ -114,6 +117,13 @@ local function menuIsTop()
   return top ~= nil and top._qolTogglesMenu == true
 end
 
+-- POKEBALL BONUS: true while a mart's BUY list is open (set by the
+-- ShopMenu wrap when the player enters BUY, cleared by the BUY list's
+-- cancel).  Only poké balls actually bought at a mart count toward the
+-- free GREAT BALL -- Oak's five starter balls and picked-up balls never
+-- do, because no script runs while the shop list is on the stack.
+local martBuyOpen = false
+
 -- LAST ITEM (M): the item id of the last bag use that succeeded (recorded
 -- by the ItemEffects.use wrap below), and the M key's held latch.  The
 -- latch is armed only while a battle sits on top of the stack (the
@@ -167,6 +177,8 @@ local TOGGLES = {
     help = "The dock sailor\nasks for the\nticket once.\vAfter that you\nwalk straight\nonto the ship." },
   { key = "last_item", label = "LAST ITEM (M)", default = false,
     help = "Press M in battle\nto use the last\nitem you used.\vBalls throw at\nthe foe; healing\nasks which\nPOKéMON." },
+  { key = "free_great_ball", label = "POKEBALL BONUS", default = false,
+    help = "Buy 10 POKé\nBALLS at any\nmart and get a\nfree GREAT\nBALL.\vThe count\ncarries over." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list)
@@ -311,6 +323,25 @@ return function(mod)
 
   mod.exports.setLastItem = function(id)
     lastItemId = id
+  end
+
+  -- POKEBALL BONUS: the free GREAT BALLs qty more POKé BALLS unlock after
+  -- count already bought -- one per ten, cumulative across shops and saves
+  mod.exports.bonusBalls = function(count, qty)
+    qty = qty or 1
+    return math.floor((count + qty) / 10) - math.floor(count / 10)
+  end
+
+  -- the clerk's "free ball" message, shown once per purchase that unlocks
+  -- one or more GREAT BALLs
+  mod.exports.bonusMessage = function()
+    return "Thanks for your\nsupport,\vplease take\nthis free\vGreat Ball!"
+  end
+
+  -- test seam: marks the mart's BUY list open exactly like the ShopMenu
+  -- wrap does, so the headless suite can drive the Bag.add bonus
+  mod.exports.setMartBuyOpen = function(open)
+    martBuyOpen = open
   end
 
   -- LAST ITEM (M) in battle: spend the turn using the last item the bag
@@ -1089,5 +1120,68 @@ return function(mod)
     if get("always_catch") then return true, 3 end
     return vanillaAttempt(ball, targetMon, targetDef, rng, rateOverride,
                           opts)
+  end
+
+  -- POKEBALL BONUS: buying 10 POKé BALLS at any mart (in one or several
+  -- purchases -- the counter is cumulative, stored in the slot's modData)
+  -- earns a free GREAT BALL, announced by the clerk.  The ShopMenu wrap
+  -- marks the mart's BUY list open, the ListMenu wrap clears the mark when
+  -- that list closes, and the Bag.add wrap counts poké balls added while
+  -- the mark is up -- the only path that runs while a shop list is on the
+  -- stack is a real mart purchase.
+  local ShopMenu = require("src.ui.ShopMenu")
+  local ListMenu = require("src.ui.ListMenu")
+  local Bag = require("src.inventory.Bag")
+  if not Game._qolTogglesBallBonusInstalled then
+    Game._qolTogglesBallBonusInstalled = true
+
+    local vanillaShopNew = ShopMenu.new
+    ShopMenu.new = function(game, stock, onQuit)
+      local menu = vanillaShopNew(game, stock, onQuit)
+      for _, item in ipairs(menu.items or {}) do
+        if item.onSelect and item.label == Strings("BUY") then
+          local select = item.onSelect
+          item.onSelect = function()
+            martBuyOpen = true
+            return select()
+          end
+        end
+      end
+      return menu
+    end
+
+    local vanillaListNew = ListMenu.new
+    ListMenu.new = function(game, title, items, opts)
+      local list = vanillaListNew(game, title, items, opts)
+      if martBuyOpen and list.dialogue and title == "BUY" then
+        local cancel = list.onCancel
+        list.onCancel = function()
+          martBuyOpen = false
+          if cancel then return cancel() end
+        end
+      end
+      return list
+    end
+
+    local vanillaBagAdd = Bag.add
+    Bag.add = function(save, id, qty, data)
+      local ok = vanillaBagAdd(save, id, qty, data)
+      if not ok then return ok end
+      if save == Game.save and martBuyOpen and id == "POKE_BALL"
+         and get("free_great_ball") then
+        local count = mod.save:get("pokeballs_bought") or 0
+        local granted = mod.exports.bonusBalls(count, qty or 1)
+        mod.save:set("pokeballs_bought", count + (qty or 1))
+        if granted > 0 then
+          for _ = 1, granted do
+            vanillaBagAdd(save, "GREAT_BALL", 1, data)
+          end
+          local TextBox = require("src.render.TextBox")
+          Game.stack:push(TextBox.new(Game,
+            Strings(mod.exports.bonusMessage())))
+        end
+      end
+      return ok
+    end
   end
 end

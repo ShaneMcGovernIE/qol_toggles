@@ -21,13 +21,15 @@ return {
       "a REMEMBER CURSOR switch keeps the battle FIGHT/BAG/PKMN/RUN cursor where it was left across turns (OFF restores the fresh-FIGHT default each turn)",
       "a HEAL ON MAP CHANGE switch fully heals the party (HP, status, PP) on every map transition",
       "a QUICK S.S. ANNE switch prompts the Vermilion dock sailor for the ticket once, then lets the player pass without dialogue",
+      "a LAST ITEM (M) switch makes M in battle use the last item used from the bag",
+      "a POKEBALL BONUS switch grants a free GREAT BALL for every ten POKé BALLS bought at any mart, announced by the clerk",
     },
     added = {
-      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the fifteen switches, persisted in options.lua",
+      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs and REMEMBER CURSOR ship ON; the other eight ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs and REMEMBER CURSOR ship ON; the other eleven ship OFF.  Toggles persist in options.lua, independent of save files",
     },
   },
   credits = {},

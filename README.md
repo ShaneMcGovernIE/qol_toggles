@@ -70,6 +70,12 @@ love .
   refusal text and does not spend your turn; with nothing remembered the
   bag opens instead.  The M key is rebindable from the Mods Hotkeys
   submenu, like every other mod hotkey.
+- **POKEBALL BONUS** — every time you buy your tenth POKé BALL at any
+  mart (in one purchase or across several), the clerk throws in a free
+  GREAT BALL: *"Thanks for your support, please take this free Great
+  Ball."*  Only balls actually bought count — the five from Professor
+  Oak and any found on the ground never do.  The counter carries across
+  shops and save sessions; the toggle ships OFF.
 
 ## Notes
 

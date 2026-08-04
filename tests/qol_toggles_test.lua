@@ -31,8 +31,8 @@ local function findRow(game)
 end
 
 local row = findRow({})
-T.neq(row, nil, "the USEFUL TOGGLES row joins the options menu")
-T.eq(row.label, "USEFUL TOGGLES", "row label")
+T.neq(row, nil, "the QOL TOGGLES row joins the options menu")
+T.eq(row.label, "QOL TOGGLES", "row label")
 
 -- ------------------------------------------------ the submenu toggles
 

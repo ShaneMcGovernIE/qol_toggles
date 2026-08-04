@@ -4,7 +4,7 @@
 -- through a shared row._label slot.  Without the ownership guard the inner
 -- wrap's restore clobbers the outer wrap's saved label, the row ends up
 -- with label = nil, and Font.draw(nil) crashes the frame the row is
--- visible (scrolling the USEFUL TOGGLES menu onto HEAL ON MAP CHANGE).
+-- visible (scrolling the QOL TOGGLES menu onto HEAL ON MAP CHANGE).
 --
 -- Runs in its own process (not nested inside the qol suite): a fresh
 -- dataset inherits the already-merged Data singleton through __index, so

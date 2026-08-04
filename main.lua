@@ -1,4 +1,4 @@
--- QoL Toggles: an OPTIONS -> USEFUL TOGGLES submenu with nine switches,
+-- QoL Toggles: an OPTIONS -> QOL TOGGLES submenu with nine switches,
 -- each persisted in options.lua:
 --   POISON SAVE      a poisoned party member survives at 1 HP and its
 --                    poison subsides: "X's poison has subsided!"
@@ -689,7 +689,7 @@ return function(mod)
     rows = next(game, rows)
     rows[#rows + 1] = {
       id = "qolToggles",
-      label = Strings("USEFUL TOGGLES"),
+      label = Strings("QOL TOGGLES"),
       value = function()
         return Strings("%d/%d ON", mod.exports.enabledCount(get), #TOGGLES)
       end,

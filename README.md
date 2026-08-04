@@ -1,6 +1,6 @@
 # QoL Toggles
 
-Adds a USEFUL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save.
+Adds a QOL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save.
 
 ## Try it
 
@@ -8,7 +8,7 @@ Adds a USEFUL TOGGLES row to OPTIONS that opens a submenu with quality-of-life s
 # 1. install: copy the folder into the game's mods/ directory
 cp -r mods/qol_toggles <game-dir>/mods/
 
-# 2. run the game, open OPTIONS, and pick USEFUL TOGGLES
+# 2. run the game, open OPTIONS, and pick QOL TOGGLES
 love .
 ```
 

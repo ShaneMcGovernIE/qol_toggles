@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0] - 2026-08-04
+
+### Changed
+
+- The OPTIONS row is renamed from USEFUL TOGGLES to QOL TOGGLES, matching
+  the mod's name everywhere (README, mod card, index).
+
 ## [1.11.0] - 2026-08-04
 
 ### Added

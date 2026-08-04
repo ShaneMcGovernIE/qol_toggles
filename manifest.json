@@ -1,7 +1,7 @@
 {
   "id": "qol_toggles",
   "name": "QoL Toggles",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
@@ -13,6 +13,6 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "OPTIONS -> USEFUL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), TMs that never break, forgettable HMs, a battle cursor that remembers its place.",
+  "description": "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), TMs that never break, forgettable HMs, a battle cursor that remembers its place.",
   "github": "ShaneMcGovernIE/qol_toggles"
 }

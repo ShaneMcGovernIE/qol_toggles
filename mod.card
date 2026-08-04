@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> USEFUL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, instant flee and a battle cursor that remembers where it was.",
+  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, instant flee and a battle cursor that remembers where it was.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -25,7 +25,7 @@ return {
       "a POKEBALL BONUS switch grants a free GREAT BALL for every ten POKé BALLS bought at any mart, announced by the clerk",
     },
     added = {
-      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
+      "a QOL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",

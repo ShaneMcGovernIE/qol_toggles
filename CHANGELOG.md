@@ -1,5 +1,79 @@
 # Changelog
 
+## [1.10.0] - 2026-08-04
+
+### Added
+
+- LAST ITEM (M): a toggle that, when ON, makes M in battle use the last
+  item you used from the bag — balls throw at the foe, healing opens the
+  party screen so you pick the mon (ETHERs/PP UP then ask for the move),
+  targetless battle items (X items, POKé FLUTE, POKé DOLL) work as usual.
+  A failed use shows the vanilla refusal text and does not spend the
+  turn; with nothing remembered the bag opens.  M is detected by and
+  rebindable from the Mods Hotkeys submenu.  Ships OFF.
+
+## [1.9.1] - 2026-08-03
+
+### Added
+
+- CATCH GIVES EXP: capturing a wild Pokémon pays out the same EXP its
+  defeat would — split among the mons that fought, with stat exp, traded
+  boosts, level-ups and the "gained N EXP" announcement.  Ships OFF.
+
+## [1.9.0] - 2026-08-03
+
+### Added
+
+- START on a controller (or P on the keyboard) on any toggle row opens a
+  full-screen help popup (the Mods Hotkeys capture idiom) with an in-depth
+  explanation of what that toggle does.  B or another START/P closes it;
+  B still exits the submenu.
+- A description taller than the popup box scrolls vertically, slowly
+  (one line per second, holding at each end), scissored to the box so it
+  never bleeds over the border.
+
+## [1.8.0] - 2026-08-03
+
+### Added
+
+- Toggle labels longer than the row's label window now scroll as a ticker
+  (hold at the start, scroll to the end, hold, scroll back — the
+  MoveRelearn name ticker) instead of bleeding over the box border.
+
+## [1.7.0] - 2026-08-03
+
+### Changed
+
+- UNLIMITED TMs/HMs splits into two switches: UNLIMITED TMs (TMs teach
+  without breaking) and FORGETTABLE HMs (HM moves can be forgotten when
+  a Pokémon learns a new move).  Both ship ON.
+
+### Added
+
+- HM ITEM REQUIRED: the FIELD MOVES ALL extras for HM moves (CUT, FLY,
+  SURF, STRENGTH, FLASH) only appear once the player holds the HM item
+  -- no CUT on the Cascade Badge alone when the CUT HM is still on the
+  S.S. Anne.  Applies to the party-menu list and the use-time
+  eligibility both; moves a Pokémon already knows are never gated, and
+  item-less field moves (DIG, TELEPORT, SOFTBOILED) are unaffected.
+  Ships ON.
+
+## [1.6.0] - 2026-08-03
+
+### Added
+
+- REMEMBER CURSOR: the battle FIGHT/BAG/PKMN/RUN cursor stays where it
+  was left across turns (use BAG to heal, and the cursor is still on
+  BAG next turn).  OFF restores the vanilla fresh-FIGHT default at the
+  end of every turn.  Ships ON.
+
+## [1.5.0] - 2026-08-03
+
+### Added
+
+- UNLIMITED TMs/HMs: TMs teach their move without breaking, and HM
+  moves can be forgotten when a Pokémon learns a new move.  Ships ON.
+
 ## [1.4.1] - 2026-08-03
 
 ### Fixed

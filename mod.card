@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> USEFUL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it, no badge gates, always-catch, perfect DVs, double EXP and instant flee.",
+  summary = "OPTIONS -> USEFUL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, instant flee and a battle cursor that remembers where it was.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -11,19 +11,23 @@ return {
       "an INFINITE REPEL switch blocks all wild walking encounters while active",
       "a FIELD MOVES ALL switch lets every species that can learn a field move (level-up or TM/HM) use it out of battle even without knowing it; badge gates and context rules still apply",
       "a BADGELESS MOVES switch drops the badge gates for FLY/SURF/CUT/STRENGTH/FLASH in the party menu and at use time",
+      "an HM ITEM REQUIRED switch keeps the FIELD MOVES ALL extras for HM moves off until the player holds the HM item (no CUT on the Cascade Badge alone when the HM is still on the S.S. Anne); moves a Pokémon already knows are never gated",
+      "an UNLIMITED TMs switch keeps TMs after teaching their move",
+      "a FORGETTABLE HMs switch lets HM moves be forgotten when a Pokémon learns a new move",
       "an ALWAYS CATCH switch makes every ball catch, Master Ball style",
       "a PERFECT DVS switch maxes the DVs of every caught Pokémon",
       "an EXP x2 switch doubles battle EXP",
       "an INSTANT FLEE switch escapes wild battles on the first try",
+      "a REMEMBER CURSOR switch keeps the battle FIGHT/BAG/PKMN/RUN cursor where it was left across turns (OFF restores the fresh-FIGHT default each turn)",
       "a HEAL ON MAP CHANGE switch fully heals the party (HP, status, PP) on every map transition",
       "a QUICK S.S. ANNE switch prompts the Vermilion dock sailor for the ticket once, then lets the player pass without dialogue",
     },
     added = {
-      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the eleven switches, persisted in options.lua",
+      "a USEFUL TOGGLES row in OPTIONS that opens a submenu with the fifteen switches, persisted in options.lua",
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH and FIELD MOVES ALL ship ON; the other eight ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs and REMEMBER CURSOR ship ON; the other eight ship OFF.  Toggles persist in options.lua, independent of save files",
     },
   },
   credits = {},

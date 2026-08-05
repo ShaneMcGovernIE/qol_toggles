@@ -633,9 +633,14 @@ return function(mod)
   -- module-local HM_MOVES table, so while the toggle is on the wrap below
   -- swaps in this gate-free copy of the same update (the vanilla body
   -- minus the HMCantDeleteText check -- keep it in lockstep with
-  -- src/ui/MoveLearnMenu.lua)
+  -- src/ui/MoveLearnMenu.lua).  The selecting guard is "== false" (not
+  -- "not selecting"): engine builds v0.1.59..v0.1.63 ran the old
+  -- ChoiceBox flow and never set selecting at all (nil), with the forget
+  -- list live whenever the menu is top -- treating nil as "not yet
+  -- choosing" would disable the toggle on those builds and the vanilla
+  -- HM gate would fire even with FORGETTABLE HMs on.
   mod.exports.forgetUpdate = function(self, dt)
-    if not self.selecting then return end
+    if self.selecting == false then return end
     local input = self.game.input
     local n = #self.mon.moves + 1 -- moves + CANCEL
     if input:wasPressed("up") then
@@ -1094,7 +1099,12 @@ return function(mod)
     MoveLearnMenu._qolTogglesHmForgetInstalled = true
     local vanillaUpdate = MoveLearnMenu.update
     MoveLearnMenu.update = function(self, dt)
-      if get("forgettable_hms") and self.selecting then
+      -- selecting ~= false (not selecting): on engine builds v0.1.59..
+      -- v0.1.63 MoveLearnMenu never sets selecting (the old ChoiceBox
+      -- flow), so a truthy check would keep the vanilla HM gate up no
+      -- matter the toggle; nil means "forget list live", exactly the
+      -- state this gate-free update is for.
+      if get("forgettable_hms") and self.selecting ~= false then
         return mod.exports.forgetUpdate(self, dt)
       end
       return vanillaUpdate(self, dt)

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.0] - 2026-08-05
+
+### Fixed
+
+- FORGETTABLE HMs did nothing on engine builds v0.1.59..v0.1.63: those
+  builds ran the old ChoiceBox forget flow, where MoveLearnMenu never
+  sets the `selecting` field the toggle gated on, so the gate-free
+  update never engaged and the vanilla "HM techniques can't be
+  deleted!" message appeared even with the toggle ON.  The toggle now
+  treats a missing `selecting` (old flow) as "forget list live", so
+  teaching any move over an HM works on every engine build.
+
 ## [1.12.0] - 2026-08-04
 
 ### Changed

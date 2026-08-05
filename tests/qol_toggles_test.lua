@@ -418,6 +418,50 @@ do
   T.eq(pushes, 0, "toggle ON: no refusal textbox")
 end
 
+do
+  -- engine builds v0.1.59..v0.1.63 ran the old ChoiceBox flow: the real
+  -- MoveLearnMenu never sets selecting (nil), the forget list is live
+  -- whenever the menu is top.  The wrap and forgetUpdate must treat nil
+  -- as "forget list live" or the toggle silently dies there and the
+  -- vanilla HM gate fires even with FORGETTABLE HMs on.
+  local MoveLearnMenu = require("src.ui.MoveLearnMenu")
+  local function press(btn)
+    return { wasPressed = function(_, k) return k == btn end }
+  end
+  local pushes = 0
+  local function oldEngineMenu(input)
+    local m = setmetatable({
+      game = { input = input,
+               data = { moves = { FLY = { name = "FLY" },
+                                  FIX_EMBER = { name = "FIX EMBER", pp = 15 } } },
+               stack = { push = function() pushes = pushes + 1 end } },
+      mon = { moves = { { id = "FLY", pp = 5 },
+                        { id = "FIX_TACKLE", pp = 10 } } },
+      newMoveId = "FIX_EMBER",
+      index = 1,
+      confirmAbandon = function() end,
+      finish = function() end,
+    }, { __index = MoveLearnMenu })
+    m.selecting = nil
+    return m
+  end
+
+  bucket.forgettable_hms = true
+  pushes = 0
+  local old = oldEngineMenu(press("a"))
+  MoveLearnMenu.update(old, 1/60)
+  T.eq(old.mon.moves[1].id, "FIX_EMBER",
+    "old engine + toggle ON: the HM is forgotten")
+  T.eq(pushes, 0, "old engine + toggle ON: no refusal textbox")
+
+  bucket.forgettable_hms = false
+  pushes = 0
+  old = oldEngineMenu(press("a"))
+  MoveLearnMenu.update(old, 1/60)
+  T.eq(old.mon.moves[1].id, "FLY",
+    "old engine + toggle OFF: no gate-free replacement (vanilla path)")
+end
+
 -- ------------------------------------------------ BADGELESS MOVES
 
 do

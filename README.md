@@ -118,17 +118,33 @@ love .
   without the bike); the bike and surfing keep their own speeds, and
   B does nothing it did not already do in the overworld.
 - **MOUSE CAM LOCK** — with the Dramatic Shape Voxel Mod installed, the
-  battle camera no longer follows the mouse.  Only the mouse steering
-  is cut — the right stick, a touch drag and the zoom still work.  The
-  toggle is inert (nothing to gate) when Dramatic Shape is absent.
+  battle camera no longer follows the mouse.  Only the mouse steering is
+  cut — the right stick, a touch drag and the zoom still work.  The toggle
+  is inert (nothing to gate) when Dramatic Shape is absent.
+- **AUTO BATTLER** — when ON, your Pokémon chooses its own move in
+  Battle Palace style: Emerald's Attack / Defense / Support probabilities
+  and low-HP table are used, and the selected category is passed through
+  Gen 1's normal AI scoring. Gen 1 has no Natures, so the mod derives an
+  approximate style from the four DVs and stat EXP. Items, switching, forced
+  moves and trainer AI are unchanged. The low-HP profile latches until that
+  Pokémon switches out. When the selected category is empty, the Emerald-
+  style random fallback has a 50% chance to lose the turn and shows the
+  incapability message. If the toggle is switched off, the original player
+  action proceeds. Ships OFF. This applies to free player turns in ordinary
+  wild/trainer battles; link battles remain synchronized and unchanged.
+- **MAP LOCATION** — when ON, entering a new area shows its name in the
+  same toast style as AUTO-REPEL's refill banner: a small box near the
+  top that fades out on its own while you keep walking.  Names come from
+  the town map, with the Route 10 PokeCenter corrected (the town map
+  data calls it "ROCK TUNNEL").  Ships ON.
 
 ## Notes
 
 - Each switch is independent and stored with your preferences (options.lua),
   so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
   CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE
-  HMs, REMEMBER CURSOR, AUTO-REPEL and REMEMBER MOVE ship ON; the rest
-  ship OFF.
+  HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship
+  ON; the rest, including AUTO BATTLER, ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.
 - Toggle labels longer than the row's label window scroll as a ticker

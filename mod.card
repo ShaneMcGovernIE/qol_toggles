@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, and hold-B running.",
+  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, Battle Palace-style auto battling from Gen 1 DVs and stat EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, and hold-B running.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -35,13 +35,15 @@ return {
       "an AUTO CUT switch cuts trees the player walks into when a party mon knows CUT",
       "a RUN (HOLD B) switch doubles foot speed while B is held, off the bike and off the surfboard",
       "a MOUSE CAM LOCK switch stops Dramatic Shape's battle camera following the mouse (stick, drag and zoom still work)",
+      "an AUTO BATTLER switch makes the player's Pokémon choose moves in Battle Palace style, mapping Gen 1 DVs and stat EXP to an approximate Palace style; low HP latches until switch-out; an empty category has Emerald's 50% fallback and incapability message; disabling the toggle preserves the original action",
+      "a MAP LOCATION switch toasts the name of the area when the player enters a new map, in the AUTO-REPEL banner style, with corrected names where the town map data lies (the Route 10 PokeCenter reads as ROCK TUNNEL there)",
     },
     added = {
       "a QOL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL and REMEMBER MOVE ship ON; the other twenty-one ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship ON; the other twenty-two, including AUTO BATTLER, ship OFF.  Toggles persist in options.lua, independent of save files",
       "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",
       "AUTO CUT only fires when a party mon knows CUT (FIELD MOVES ALL does not extend to it), and the step is consumed by the cut text + animation",
       "NO ENCOUNTER DUPES is session-scoped, so a restart forgets the last species",

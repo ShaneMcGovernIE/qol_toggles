@@ -10,6 +10,8 @@ local Data = require("src.core.Data")
 local Game = require("src.core.Game")
 local vanillaGamepadDispatch = Game.gamepadpressed
 Data:load()
+local TypeChart = require("src.battle.TypeChart")
+TypeChart.load(Data)
 
 local loadRoot = os.getenv("QOL_TOGGLES_ROOT")
 local run = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
@@ -66,7 +68,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 30, "thirty toggles in the submenu")
+T.eq(#rows, 32, "thirty-two toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -97,6 +99,8 @@ T.eq(rows[27].id, "remember_move", "toggle 27: remember move")
 T.eq(rows[28].id, "keep_money", "toggle 28: keep money")
 T.eq(rows[29].id, "auto_cut", "toggle 29: auto cut")
 T.eq(rows[30].id, "run_hold_b", "toggle 30: run (hold B)")
+T.eq(rows[31].id, "auto_battler", "toggle 31: Battle Palace auto battler")
+T.eq(rows[32].id, "map_location", "toggle 32: map location toast")
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
@@ -129,6 +133,8 @@ T.eq(ex.defaultFor("remember_move"), true, "REMEMBER MOVE ships ON")
 T.eq(ex.defaultFor("keep_money"), false, "KEEP MONEY ships OFF")
 T.eq(ex.defaultFor("auto_cut"), false, "AUTO CUT ships OFF")
 T.eq(ex.defaultFor("run_hold_b"), false, "RUN (HOLD B) ships OFF")
+T.eq(ex.defaultFor("auto_battler"), false, "AUTO BATTLER ships OFF")
+T.eq(ex.defaultFor("map_location"), true, "MAP LOCATION ships ON")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -231,6 +237,9 @@ end
 
 local bucket = run.loader.modOptions.qol_toggles
 if not bucket then bucket = {}; run.loader.modOptions.qol_toggles = bucket end
+
+-- The pure chooser and autoBattleAction seam are exercised here; the
+-- engine's resolveTurn integration is pinned by the engine battle suite.
 
 do
   local flyer = { learnset = { { level = 1, move = "FIX_TACKLE" } },
@@ -1047,6 +1056,7 @@ for _, spec in ipairs({ -- the ids are stable, from the TOGGLES list
   "no_enc_dupes", "instant_fish", "heal_battle", "auto_repel",
   "bulk_mart", "bulk_coins", "lights_on", "remember_move", "keep_money",
   "auto_cut", "run_hold_b",
+  "auto_battler", "map_location",
 }) do
   local help = ex.helpFor(spec)
   T.check(type(help) == "string" and #help > 0,
@@ -1305,6 +1315,32 @@ do
   T.eq(save.repelSteps, nil, "and steps are untouched")
 end
 
+-- ------- MAP LOCATION (the area-name toast, AUTO-REPEL banner style)
+
+-- the display name: corrected name, town map name, label split, id
+T.eq(ex.locationName(Data, "FIX_TOWN"), "FIX TOWN",
+     "the town map name for a known town")
+T.eq(ex.locationName(Data, "FIX_ROUTE"), "FIX ROUTE", "town map name 2")
+T.eq(ex.locationName(
+       { field = { townMap = { locations = {
+           ROCK_TUNNEL_POKECENTER = { name = "ROCK TUNNEL" } } } } },
+       "ROCK_TUNNEL_POKECENTER"),
+     "ROCK TUNNEL POKECENTER",
+     "the corrected name beats the town map's misleading entry")
+T.eq(ex.locationName({}, "FIX_TOWN", { def = { label = "FixTown" } }),
+     "FIX TOWN", "the map label split at case boundaries")
+T.eq(ex.locationName({}, "MANSION_1F",
+       { def = { label = "PokemonMansion1F" } }),
+     "POKEMON MANSION 1F", "digit-letter boundaries split too")
+T.eq(ex.locationName({}, "SOME_MAP"), "SOME MAP", "the id as a last resort")
+
+-- the toast rides the AUTO-REPEL banner slot (same draw, same expiry)
+T.eq(ex.autoRepelToastText(600), nil, "no location toast by default")
+ex.setLocationToast("PALLET TOWN", 600)
+T.eq(ex.autoRepelToastText(600), "PALLET TOWN",
+     "the toast shows while active")
+T.eq(ex.autoRepelToastText(602.5), nil, "and expires like AUTO-REPEL's")
+
 -- ------- BULK COINS (the Game Corner clerk's quantity tiers)
 
 do
@@ -1434,6 +1470,233 @@ do
   pickerPressed.b = nil
   T.eq(popped, 2, "cancel pops the picker")
   T.eq(chosen, nil, "B cancels with nil")
+end
+
+-- ------- BATTLE PALACE AUTO BATTLER
+
+-- Gen 1 has no NATURE field.  The mod derives a stable representative
+-- Battle Palace nature from the four Gen 1 DVs plus stat EXP, with the
+-- Palace's exact probability tables applied after that mapping.
+T.eq(ex.palaceNature({ dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
+                       statExp = {} }),
+     "LONELY", "high Attack / low Defense maps to LONELY")
+T.eq(ex.palaceNature({ dvs = { attack = 0, defense = 0, speed = 0, special = 0 },
+                       statExp = { speed = 65535 } }),
+     "TIMID", "speed stat EXP participates in the mapping")
+T.eq(ex.palaceNature({ dvs = { attack = 0, defense = 0, speed = 0, special = 0 },
+                       statExp = {} }),
+     "HARDY", "an even build maps to a neutral Palace nature")
+
+T.eq(ex.palaceCategory("LONELY", false, 19), "attack",
+     "LONELY's high-HP roll can select Attack")
+T.eq(ex.palaceCategory("LONELY", false, 20), "defense",
+     "LONELY's high-HP roll crosses into Defense at 20")
+T.eq(ex.palaceCategory("LONELY", false, 45), "support",
+     "LONELY's high-HP roll selects Support after both thresholds")
+T.eq(ex.palaceCategory("LONELY", true, 83), "attack",
+     "LONELY's low-HP table has its own thresholds")
+T.eq(ex.palaceCategory("LONELY", true, 84), "defense",
+     "LONELY's low-HP table crosses into Defense at 84")
+
+T.eq(ex.palaceMoveGroup({ id = "FIX_TACKLE", power = 40 }), "attack",
+     "damaging moves are Attack moves")
+T.eq(ex.palaceMoveGroup({ id = "USER_OR_SELECTED", power = 0,
+                          target = "user_or_selected_user" }), "support",
+     "zero-power user-or-selected moves are Support in Palace rules")
+T.eq(ex.palaceMoveGroup({ id = "USER_OR_SELECTED", power = 40,
+                          target = "user_or_selected_user" }), "attack",
+     "powered user-or-selected moves are Attack in Palace rules")
+T.eq(ex.palaceMoveGroup({ id = "SWORDS_DANCE", power = 0,
+                          target = "user" }), "defense",
+     "self-targeting moves are Defense moves")
+T.eq(ex.palaceMoveGroup({ id = "TOXIC", power = 0,
+                          target = "selected" }), "support",
+     "non-damaging opponent-targeting moves are Support moves")
+T.eq(ex.palaceMoveGroup({ id = "COUNTER", power = 0,
+                          target = "selected" }), "support",
+     "Counter remains Support like the Gen 3 Palace")
+T.eq(ex.palaceMoveGroup({ id = "SONICBOOM", power = 1,
+                          effect = "SPECIAL_DAMAGE_EFFECT" }), "attack",
+     "fixed-damage moves remain Attack moves")
+
+do
+  local aiBattle = {
+    data = {
+      moves = {
+        FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
+        FIX_EMBERISH = { id = "FIX_EMBERISH", power = 40, type = "FIRE" },
+      },
+      type_chart = {
+        matchups = {},
+        types = { NORMAL = { name = "NORMAL", category = "physical" },
+                  FIRE = { name = "FIRE", category = "special" } },
+      },
+    },
+    rng = function(a, b) return 1 end,
+    enemyAIMods = {},
+  }
+  local aiBattler = {
+    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
+            statExp = {}, hp = 100, stats = { hp = 100 } },
+    curMoves = { { id = "FIX_TACKLE", pp = 10 },
+                 { id = "FIX_EMBERISH", pp = 10 } },
+  }
+  local target = { mon = { status = nil }, curTypes = { "GRASS" } }
+  local picked = ex.palaceChooseMove(aiBattle, aiBattler, target,
+                                     { nature = "LONELY", categoryRoll = 0 })
+  T.eq(picked.id, "FIX_EMBERISH",
+       "a selected category is scored by the normal AI before tie-breaking")
+end
+
+do
+  local data = { moves = {
+    FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
+    SWORDS_DANCE = { id = "SWORDS_DANCE", power = 0, type = "NORMAL",
+                     target = "user", effect = "ATTACK_UP2_EFFECT" },
+  } }
+  local battle = { data = data, rng = function() return 0 end,
+                   ruleset = { enemyUnlimitedPP = true } }
+  local battler = {
+    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
+            statExp = {}, hp = 20, stats = { hp = 100 }, status = nil },
+    curMoves = { { id = "FIX_TACKLE", pp = 10 },
+                 { id = "SWORDS_DANCE", pp = 10 } },
+  }
+  local target = { mon = { status = nil }, curTypes = { "NORMAL" } }
+  T.eq(ex.palaceChooseMove(battle, battler, target,
+                           { nature = "LONELY", categoryRoll = 0,
+                             moveRoll = 1 }).id, "FIX_TACKLE",
+       "the auto battler chooses from the nature-selected category")
+  battler.mon.hp = 10
+  T.eq(ex.palaceChooseMove(battle, battler, target,
+                           { nature = "LONELY", categoryRoll = 0,
+                             moveRoll = 1 }).id, "FIX_TACKLE",
+       "low HP still chooses a usable move from the selected category")
+end
+
+do
+  -- The live hook substitutes only the player's action; with the toggle OFF
+  -- the existing enemy-action chain remains the source of truth.
+  local vanilla = function() return { id = "FIX_SCRATCH", pp = 10 } end
+  bucket.auto_battler = false
+  local off = ex.autoBattleAction(nil, { id = "FIX_SCRATCH", pp = 10 })
+  T.eq(off.id, "FIX_SCRATCH", "AUTO BATTLER OFF delegates to vanilla")
+  bucket.auto_battler = true
+  local liveData = { moves = {
+    FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
+  } }
+  local liveBattler = {
+    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
+            statExp = {}, hp = 100, stats = { hp = 100 } },
+    curMoves = { { id = "FIX_TACKLE", pp = 10 } },
+  }
+  local liveBattle = {
+    data = liveData, ruleset = { enemyUnlimitedPP = false }, rng = function(a, b)
+      return a == 0 and 0 or 1
+    end,
+    player = liveBattler, enemy = {},
+    fightLockedAction = function() return nil end,
+  }
+  local on = ex.autoBattleAction(liveBattle,
+                                 { id = "FIX_SCRATCH", pp = 10 })
+  T.eq(on.id, "FIX_TACKLE", "AUTO BATTLER ON supplies the player's action")
+  T.eq(ex.autoBattleAction(liveBattle, { id = "FIX_SCRATCH", pp = 10 }).id,
+       "FIX_TACKLE", "AUTO BATTLER uses the exported live seam")
+  T.eq(ex.autoBattleShouldAct({ phase = "menu", player = liveBattler,
+                                enemy = liveBattle.enemy }), true,
+       "AUTO BATTLER takes over a free battle menu turn")
+  T.eq(ex.autoBattleShouldAct({ phase = "moveSelect", player = liveBattler,
+                                enemy = liveBattle.enemy }), false,
+       "AUTO BATTLER does not take over the move-selection screen")
+  local vanillaUpdate = function() return "vanilla" end
+  local menuAction
+  local menuBattle = {
+    phase = "menu", _qolAutoBattleProbe = true, moveIndex = 1, data = liveData,
+    rng = function(a, b) return a == 0 and 0 or 1 end,
+    player = liveBattler, enemy = liveBattle.enemy,
+    menuLockedAction = function() return nil end,
+    fightLockedAction = function() return nil end,
+    resolveTurn = function(_, action) menuAction = action end,
+  }
+  T.eq(ex.autoBattleUpdate(menuBattle, vanillaUpdate, 0), true,
+       "the live menu seam consumes the update")
+  T.eq(menuAction.id, "FIX_TACKLE",
+       "the live menu seam submits the Palace action")
+  bucket.auto_battler = false
+  T.eq(ex.autoBattleUpdate(menuBattle, vanillaUpdate, 0), "vanilla",
+       "the live seam delegates when AUTO BATTLER is OFF")
+  T.eq(ex.autoBattleShouldAct({ phase = "menu", player = liveBattler,
+                                enemy = liveBattle.enemy }), false,
+       "AUTO BATTLER OFF leaves the battle menu alone")
+  bucket.auto_battler = false
+end
+
+do
+  local fallbackBattle = { data = { moves = {
+    FIX_TACKLE = { id = "FIX_TACKLE", power = 40 },
+    SWORDS_DANCE = { id = "SWORDS_DANCE", power = 0,
+                     effect = "ATTACK_UP2_EFFECT", target = "user" },
+  } }, rng = function(a, b) return a == 0 and 0 or 1 end }
+  local fallbackMon = {
+    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
+            statExp = {}, hp = 100, stats = { hp = 100 } },
+    curMoves = { { id = "FIX_TACKLE", pp = 10 } },
+  }
+  local picked = ex.palaceChooseMove(fallbackBattle, fallbackMon, nil,
+                                     { nature = "LONELY", categoryRoll = 99,
+                                       fallbackRoll = 1, fallbackChance = 0,
+                                       randomWithinCategory = true,
+                                       unlimited = false })
+  T.eq(picked.id, "FIX_TACKLE", "an empty Palace category falls back to a move")
+  local skipped = ex.palaceChooseMove(fallbackBattle, fallbackMon, nil,
+                                      { nature = "LONELY", categoryRoll = 99,
+                                        fallbackRoll = 1, fallbackChance = 50,
+                                        randomWithinCategory = true,
+                                        unlimited = false })
+  T.eq(skipped, nil, "the fallback has Emerald's 50% incapability roll")
+  bucket.auto_battler = true
+  local queued = {}
+  local liveFallback = {
+    data = fallbackBattle.data,
+    player = fallbackMon,
+    enemy = { mon = { status = nil }, curTypes = { "NORMAL" } },
+    fightLockedAction = function() return nil end,
+    rng = function(a, b) return a == 0 and 99 or 1 end,
+    say = function(_, text) queued[#queued + 1] = text end,
+  }
+  fallbackMon.mon.hp = 100
+  fallbackMon._qolPalaceLowHp = nil
+  liveFallback.player.name = "FIXMON"
+  local wait = ex.autoBattleAction(liveFallback,
+                                    { id = "FIX_SCRATCH", pp = 10 })
+  T.eq(wait, nil, "a failed live fallback has no player action")
+  T.eq(#queued, 1, "a failed live fallback queues the incapability text")
+  bucket.auto_battler = false
+  T.eq(ex.autoBattleAction(liveFallback, { id = "FIX_SCRATCH", pp = 10 }).id,
+       "FIX_SCRATCH", "turning AUTO BATTLER off preserves the action")
+end
+
+do
+  -- The low-HP profile is latched until the battler is replaced, matching
+  -- Emerald's palaceFlags behavior rather than recomputing from current HP.
+  local latchBattle = { data = { moves = {
+    FIX_TACKLE = { id = "FIX_TACKLE", power = 40 },
+  } }, rng = function(a, b) return a == 0 and 0 or 1 end }
+  local latchMon = {
+    mon = { dvs = { attack = 0, defense = 0, speed = 0, special = 0 },
+            statExp = {}, hp = 40, stats = { hp = 100 } },
+    curMoves = { { id = "FIX_TACKLE", pp = 10 } },
+  }
+  ex.palaceChooseMove(latchBattle, latchMon, nil,
+                      { nature = "LONELY", categoryRoll = 0,
+                        randomWithinCategory = true, unlimited = false })
+  T.eq(latchMon._qolPalaceLowHp, true, "low HP sets the Palace style latch")
+  latchMon.mon.hp = 100
+  ex.palaceChooseMove(latchBattle, latchMon, nil,
+                      { nature = "LONELY", categoryRoll = 0,
+                        randomWithinCategory = true, unlimited = false })
+  T.eq(latchMon._qolPalaceLowHp, true,
+       "healing does not clear the Palace style latch")
 end
 
 -- ------- RUN (HOLD B) (runFrames halves the per-step frame count)

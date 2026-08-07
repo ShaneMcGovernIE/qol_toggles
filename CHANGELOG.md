@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.17.0] - 2026-08-07
+
+### Added
+
+- AUTO BATTLER: when enabled, the player's Pokémon chooses its own move
+  using the Pokémon Emerald Battle Palace's Attack / Defense / Support
+  category probabilities, including the below-half-HP table and the
+  category-missing fallback. The selected category is passed through Gen 1's
+  normal AI scoring. Because Gen 1 has no Nature field, a transparent
+  approximate Palace style is derived from the four Gen 1 DVs and stat EXP.
+  Trainer AI, items, switching, and forced multi-turn actions remain
+  unchanged. Ships OFF.
+- MAP LOCATION: entering a new area shows its name in the AUTO-REPEL
+  toast style (non-modal, fades out on its own), with the town map's
+  names and a corrected name for the Route 10 PokeCenter (the town map
+  data calls it "ROCK TUNNEL").  Ships ON.
+
+### Notes
+
+- The Emerald source keeps the original Palace category table in
+  `src/battle_script_commands.c` and the chooser in
+  `src/battle_gfx_sfx_util.c`; the Gen 1 port preserves those thresholds but
+  maps each mon's DV/stat-EXP spread to an approximate style. Emerald does
+  not define a DV-to-Nature mapping, so this part is intentionally a mod
+  design approximation. Emerald's exact static target metadata is not
+  exposed by the current Gen 1 extractor, so move grouping uses the closest
+  available target/effect representation. The low-HP profile latches until
+  switch-out. An empty selected category follows Emerald's random fallback,
+  50% incapability roll, and incapability message; turning the toggle off
+  preserves the originally selected Gen 1 action.
+
+- The engine's existing `battle.enemy_action` hook remains trainer-side;
+  AUTO BATTLER is installed through a guarded player-side `BattleState.update`
+  wrapper, while items, switches, link battles, and locked multi-turn actions
+  remain on their existing paths. The wrapper marks its own resolution to
+  avoid selecting twice if the battle update is re-entered by a caller.
+
 ## [1.16.4] - 2026-08-07
 
 ### Fixed

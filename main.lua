@@ -47,6 +47,7 @@
 --                    mouse (the right stick, a drag and the zoom still work)
 --   BULK COINS         the Celadon Game Corner clerk sells 50, 500 or
 --                      9,999 coins at a time
+--   MAP LOCATION       entering a new area shows its name in a toast
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -57,12 +58,13 @@
 -- wrapped BattleState.update while the FIGHT/BAG/PKMN/RUN menu is up.
 --
 -- The submenu is a registry screen and the OPTIONS row joins through the
--- ui.options.rows hook.  The behaviors hook engine seams: the poison tick
+-- ui.options.rows hook. The behaviors hook engine seams: the poison tick
 -- (OverworldState.applyFieldPoison), the pokemon.caught event,
 -- encounter.roll, PartyMenu.update (phantom moves + badge injection),
 -- fieldmove.eligibility, Catching.attempt, exp.gain, battle.run,
--- BattleState.update, ItemEffects.use, ShopMenu.new/ListMenu.new (the
--- POKEBALL BONUS buy window) and Bag.add (the bonus grant).
+-- BattleState.update (including the autoBattleUpdate seam for AUTO BATTLER),
+-- ItemEffects.use, ShopMenu.new/ListMenu.new (the POKEBALL BONUS buy
+-- window) and Bag.add (the bonus grant).
 
 local Game = require("src.core.Game")
 
@@ -179,6 +181,11 @@ local martSellOpen = false
 local autoRepelToast = nil
 local TOAST_SECONDS = 2.5
 
+-- MAP LOCATION: the last map the player entered (nil until the first
+-- entry), so a toast fires only when the area actually changes; the
+-- session-scoped mirror of lastEncounterSpecies.
+local lastMapId = nil
+
 local TOGGLES = {
   { key = "poison_save", label = "POISON SAVE", default = true,
     help = "A poisoned mon\nfated to faint\nfrom the step\nkeeps 1 HP and\nthe poison\nsubsides." },
@@ -240,6 +247,10 @@ local TOGGLES = {
     help = "Walk into a cut\ntree and a mon\nthat knows CUT\ncuts it for\nyou." },
   { key = "run_hold_b", label = "RUN (HOLD B)", default = false,
     help = "Hold B to move\ntwice as fast\non foot.\vNo effect on\nthe bike or\nsurfing." },
+  { key = "auto_battler", label = "AUTO BATTLER", default = false,
+    help = "Battle Palace\nAI picks moves.\vDVs and stat\nEXP shape its\nstyle." },
+  { key = "map_location", label = "MAP LOCATION", default = true,
+    help = "Entering a new\narea shows its\nname in a toast\nthat fades out,\nlike AUTO-REPEL." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list)
@@ -255,6 +266,13 @@ local HM_BADGES = { "THUNDERBADGE", "BOULDERBADGE", "CASCADEBADGE",
 local HM_ITEMS = {
   CUT = "HM_CUT", FLY = "HM_FLY", SURF = "HM_SURF",
   STRENGTH = "HM_STRENGTH", FLASH = "HM_FLASH",
+}
+
+-- MAP LOCATION: display names that correct the town map data -- the town
+-- map calls the Route 10 PokeCenter "ROCK TUNNEL", which would be a lie
+-- for a location toast; the map's own label is the accurate name
+local MAP_LOCATION_NAMES = {
+  ROCK_TUNNEL_POKECENTER = "ROCK TUNNEL POKECENTER",
 }
 
 return function(mod)
@@ -486,6 +504,32 @@ return function(mod)
     return nil
   end
 
+  -- MAP LOCATION: the display name for a map -- a corrected name for the
+  -- ids whose town-map entry lies (the Route 10 PokeCenter is "ROCK
+  -- TUNNEL" there), else the town map's name for the id, else the map's
+  -- own label split at case boundaries (FixTown -> FIX TOWN), else the
+  -- id itself.  Pure, so the headless suite asserts it.
+  mod.exports.locationName = function(data, mapId, map)
+    local override = MAP_LOCATION_NAMES[mapId]
+    if override then return override end
+    local townMap = data and data.field and data.field.townMap
+    local locations = townMap and (townMap.locations or townMap)
+    local entry = type(locations) == "table" and locations[mapId]
+    local name = type(entry) == "table" and entry.name
+    local def = map and map.def or (data and data.maps and data.maps[mapId])
+    if not name and def and type(def.label) == "string" then
+      -- FixTown -> FIX TOWN, CeladonMansion1F -> CELADON MANSION 1F
+      name = def.label:gsub("(%l)(%u)", "%1 %2"):gsub("(%l)(%d)", "%1 %2")
+    end
+    return (name or tostring(mapId):gsub("_", " ")):upper()
+  end
+
+  -- MAP LOCATION toast: the same on-screen slot as the AUTO-REPEL banner
+  -- (one draw wrap renders both -- the last armed toast wins)
+  mod.exports.setLocationToast = function(name, now)
+    mod.exports.setAutoRepelToast(name, now)
+  end
+
   -- the onStepComplete pre-refill: autoRepelToastFor plus one extra step
   -- so vanilla's own decrement (repelSteps = repelSteps - 1) lands on the
   -- item's exact count; returns the item used, or nil when there was
@@ -620,6 +664,287 @@ return function(mod)
       return frames / 2
     end
     return frames
+  end
+
+  -- ---------------------------------------------------- BATTLE PALACE AI
+
+  -- Emerald's Palace table stores cumulative Attack/Defense thresholds for
+  -- each nature, with a second table below half HP.  Gen 1 has no nature
+  -- byte, so the mod chooses an approximate Palace nature from the
+  -- mon's four stored DVs and its stat EXP. This is deliberately a
+  -- transparent approximation rather than pretending the original nature
+  -- exists. Emerald does not define a DV-to-Nature mapping; Attack/Defense/
+  -- Speed/Special are ranked here, and the dominant axis selects the closest
+  -- Palace style. Stat EXP affects the rank because it affects the actual
+  -- Gen 1 stat calculation.
+  local PALACE_STYLES = {
+    HARDY   = { 61, 68, 61, 68 }, LONELY  = { 20, 45, 84, 92 },
+    BRAVE   = { 70, 85, 32, 92 }, ADAMANT = { 38, 69, 70, 85 },
+    NAUGHTY = { 20, 90, 70, 92 }, BOLD    = { 30, 50, 32, 90 },
+    DOCILE  = { 56, 78, 56, 78 }, RELAXED = { 25, 40, 75, 90 },
+    IMPISH  = { 69, 75, 28, 83 }, LAX     = { 35, 45, 29, 35 },
+    TIMID   = { 62, 72, 30, 50 }, HASTY   = { 58, 95, 88, 94 },
+    SERIOUS = { 34, 45, 29, 40 }, JOLLY   = { 35, 40, 35, 95 },
+    NAIVE   = { 56, 78, 56, 78 }, MODEST  = { 35, 80, 34, 94 },
+    MILD    = { 44, 94, 34, 40 }, QUIET   = { 56, 78, 56, 78 },
+    BASHFUL = { 30, 88, 30, 88 }, RASH    = { 30, 43, 27, 33 },
+    CALM    = { 40, 90, 25, 87 }, GENTLE  = { 18, 88, 90, 95 },
+    SASSY   = { 88, 94, 22, 42 }, CAREFUL = { 42, 92, 42, 47 },
+    QUIRKY  = { 56, 78, 56, 78 },
+  }
+
+  local function statExpValue(v)
+    -- Match Stats.calc's contribution: floor(ceil(sqrt(exp))/4).
+    return math.floor(math.min(255, math.ceil(math.sqrt(v or 0))) / 4)
+  end
+
+  local function palaceStat(mon, key)
+    local dvs = mon and mon.dvs or {}
+    local exp = mon and mon.statExp or {}
+    return (dvs[key] or 0) * 2 + statExpValue(exp[key])
+  end
+
+  mod.exports.palaceNature = function(mon)
+    local atk = palaceStat(mon, "attack")
+    local def = palaceStat(mon, "defense")
+    local spd = palaceStat(mon, "speed")
+    local spc = palaceStat(mon, "special")
+    local values = { attack = atk, defense = def, speed = spd, special = spc }
+    local high = "attack"
+    for _, key in ipairs({ "defense", "speed", "special" }) do
+      if values[key] > values[high] then high = key end
+    end
+    -- Ties in the weakest axis are resolved toward the conventional nature
+    -- for that boosted stat: Speed-only becomes Timid, Attack-only Lonely,
+    -- Defense-only Bold, and Special-only Mild.
+    local lowOrder = {
+      attack = { "defense", "speed", "special" },
+      defense = { "attack", "speed", "special" },
+      speed = { "attack", "defense", "special" },
+      special = { "attack", "defense", "speed" },
+    }
+    local low = lowOrder[high][1]
+    for _, key in ipairs(lowOrder[high]) do
+      if values[key] < values[low] then low = key end
+    end
+    local pair = high .. ":" .. low
+    local mapped = {
+      ["attack:defense"] = "LONELY", ["attack:speed"] = "ADAMANT",
+      ["attack:special"] = "NAUGHTY", ["defense:attack"] = "BOLD",
+      ["defense:speed"] = "MODEST", ["defense:special"] = "CALM",
+      ["speed:attack"] = "TIMID", ["speed:defense"] = "HASTY",
+      ["speed:special"] = "JOLLY", ["special:attack"] = "MILD",
+      ["special:defense"] = "GENTLE", ["special:speed"] = "RASH",
+    }
+    -- If the spread is too small to express a meaningful preference, use
+    -- Hardy. Otherwise choose the Gen 3 nature whose raised/lowered axes
+    -- match the largest and smallest Gen 1 stat contributions.
+    local spread = values[high] - values[low]
+    if spread < 4 then return "HARDY" end
+    return mapped[pair] or "HARDY"
+  end
+
+  mod.exports.palaceCategory = function(nature, lowHp, roll)
+    local s = PALACE_STYLES[nature] or PALACE_STYLES.HARDY
+    local i = lowHp and 3 or 1
+    roll = roll or math.random(0, 99)
+    if roll < s[i] then return "attack" end
+    if roll < s[i + 1] then return "defense" end
+    return "support"
+  end
+
+  -- Emerald's GetBattlePalaceMoveGroup classifies by static target and
+  -- power only. Gen 1's extractor does not currently expose the ROM target,
+  -- so the port uses the closest available representation. This deliberately
+  -- does not inspect effects: a non-damaging selected-target move is Support,
+  -- while a powered selected-target move is Attack, exactly as Palace does.
+  mod.exports.palaceMoveGroup = function(move)
+    if not move then return "attack" end
+    local target = move.target
+    -- This mirrors GetBattlePalaceMoveGroup exactly where the extractor gives
+    -- us the modern target names: USER is Defense; DEPENDS and
+    -- OPPONENTS_FIELD are Support; all other targets are Attack iff power is
+    -- nonzero, otherwise Support.
+    if target == "user" or target == "user_side" then
+      return "defense"
+    end
+    if target == "depends" or target == "opponents_field"
+       or target == "field" then
+      return "support"
+    end
+    if target == "user_or_selected_user" or target == "selected"
+       or target == "random" or target == "both"
+       or target == "foes_and_ally" then
+      return (move.power or 0) == 0 and "support" or "attack"
+    end
+    if move.id == "COUNTER" or move.id == "MIRROR_COAT"
+       or move.id == "MIMIC" or move.id == "METRONOME"
+       or move.id == "MIRROR_MOVE" or move.id == "NATURE_POWER" then
+      return "support"
+    end
+    -- Gen 1's imported records usually omit target. These fixed-damage
+    -- attacks have power 1 in Emerald but may be represented with dummy/zero
+    -- power by the Gen 1 extractor, so identify them explicitly.
+    if move.id == "DRAGON_RAGE" or move.id == "NIGHT_SHADE"
+       or move.id == "PSYWAVE" or move.id == "SEISMIC_TOSS"
+       or move.id == "SONICBOOM" then
+      return "attack"
+    end
+    if (move.power or 0) == 0 then return "support" end
+    return "attack"
+  end
+
+  -- Pure move chooser used by the live auto-battle seam and by the suite.
+  -- The first pass preserves the Palace's category probability. If the
+  -- category is empty, Emerald falls back to a usable move and applies its
+  -- 50% incapability roll; this function returns nil for that skipped turn.
+  mod.exports.palaceChooseMove = function(battle, battler, target, opts)
+    opts = opts or {}
+    local moves, grouped = {}, { attack = {}, defense = {}, support = {} }
+    local unlimited = opts.unlimited
+    if unlimited == nil then
+      unlimited = not battler.isPlayer
+                 and battle and battle.ruleset
+                 and battle.ruleset.enemyUnlimitedPP or false
+    end
+    for i, mv in ipairs((battler and battler.curMoves) or {}) do
+      if mv.id and (unlimited or (mv.pp or 0) > 0)
+         and battler.disabledSlot ~= i then
+        local def = battle and battle.data and battle.data.moves[mv.id] or mv
+        local copy = { id = mv.id, pp = mv.pp, _index = i }
+        local group = mod.exports.palaceMoveGroup(def)
+        moves[#moves + 1] = copy
+        grouped[group][#grouped[group] + 1] = copy
+      end
+    end
+    if #moves == 0 then return nil end
+    local rng = opts.rng or (battle and battle.rng) or math.random
+    local roll = opts.categoryRoll
+    if roll == nil then roll = rng(0, 99) end
+    local nature = opts.nature or mod.exports.palaceNature(battler.mon)
+    local maxHp = battler.mon.stats and battler.mon.stats.hp or 0
+    -- Emerald latches the low-HP style after a switch. Mirror that on the
+    -- battler object: healing above half HP does not restore the normal table,
+    -- while switching creates a fresh battler and clears the latch.
+    if not battler._qolPalaceLowHp and battler.mon.hp > 0
+       and battler.mon.hp <= math.floor(maxHp / 2)
+       and battler.mon.status ~= "SLP" then
+      battler._qolPalaceLowHp = true
+    end
+    local lowHp = battler._qolPalaceLowHp == true
+    local category = mod.exports.palaceCategory(nature, lowHp, roll)
+    local selected = grouped[category]
+    if #selected > 0 then
+      -- Emerald passes the category mask to its ordinary AI rather than
+      -- choosing uniformly. Reuse Gen 1's existing scoring layers against
+      -- the opponent, restricted to this category; when a headless seam
+      -- lacks the target substrate, keep the deterministic random fallback.
+      if not opts.randomWithinCategory and target and target.curTypes
+         and target.mon and battle and battle.data
+         and battle.data.type_chart then
+        local TrainerAI = require("src.battle.TrainerAI")
+        local proxy = {}
+        for k, v in pairs(battler) do proxy[k] = v end
+        proxy.curMoves, proxy.disabledSlot, proxy.aiLayer2 = selected, nil, 0
+        local aiBattle = {}
+        for k, v in pairs(battle or {}) do aiBattle[k] = v end
+        aiBattle.player = target
+        aiBattle.enemyAIMods = opts.aiMods or { 1, 2, 3 }
+        local picked = TrainerAI.chooseMove(proxy, rng, aiBattle)
+        if picked then return picked end
+      end
+      local selectedIndex = opts.moveRoll
+      if selectedIndex == nil then selectedIndex = rng(1, #selected) end
+      -- The ordinary Gen 1 trainer AI has no separate Palace mask API, so
+      -- the pure seam uses its existing scoring only when callers provide a
+      -- complete battle target/type substrate. Live battles use the explicit
+      -- random tie path below until that mask is made a first-class engine
+      -- service; category selection itself remains Palace-faithful.
+      return selected[selectedIndex]
+    end
+    -- Emerald's fallback prefers the sole category that has >=2 usable
+    -- moves; otherwise it samples all usable slots. The released Emerald
+    -- build has a support-counting bug, so Support is omitted from this
+    -- "multiple moves" test unless a caller explicitly asks for the
+    -- intended BUGFIX behavior.
+    local multiGroups = {}
+    for _, group in ipairs({ "attack", "defense", "support" }) do
+      local count = #grouped[group]
+      if count >= 2 and (group ~= "support" or opts.bugfixSupportCount) then
+        multiGroups[#multiGroups + 1] = group
+      end
+    end
+    local fallbackPool = moves
+    if #multiGroups == 1 then fallbackPool = grouped[multiGroups[1]] end
+    local fallbackIndex = opts.fallbackRoll or rng(1, #fallbackPool)
+    local fallback = fallbackPool[fallbackIndex]
+    if opts.fallbackIncapable then return nil end
+    local failRoll = opts.fallbackChance
+    if failRoll == nil then failRoll = rng(0, 99) end
+    if failRoll >= 50 then return nil end
+    return fallback
+  end
+
+  mod.exports.autoBattleShouldAct = function(battle)
+    if not get("auto_battler") or not battle
+       or (battle.phase ~= "menu" and not battle._qolAutoBattleProbe)
+       or battle.demo or battle.safari or battle.ghost
+       or battle.kind == "link" or battle.spectating
+       or not battle.player or not battle.player.mon
+       or not battle.enemy or battle.player.mon.hp <= 0 then
+      return false
+    end
+    if battle.menuLockedAction and battle:menuLockedAction(battle.player) then
+      return false
+    end
+    return true
+  end
+
+  mod.exports.autoBattleUpdate = function(battle, vanillaUpdate, dt)
+    if not mod.exports.autoBattleShouldAct(battle) then
+      return vanillaUpdate(battle, dt)
+    end
+    local player = battle.player
+    local proposed = player.curMoves and player.curMoves[battle.moveIndex]
+    local action = mod.exports.autoBattleAction(battle, proposed)
+    if action == proposed and proposed == nil then
+      return vanillaUpdate(battle, dt)
+    end
+    battle._qolAutoBattleResolving = true
+    battle.phase = "messages"
+    battle.afterQueue = "menu"
+    local ok, result = pcall(battle.resolveTurn, battle, action)
+    battle._qolAutoBattleResolving = nil
+    if not ok then error(result, 0) end
+    return true
+  end
+
+  -- Action helper used by the guarded BattleState update wrapper below.
+  -- It remains exported so the headless suite can exercise the seam without
+  -- fabricating controller input.
+  mod.exports.autoBattleAction = function(battle, proposed)
+    if not get("auto_battler") or not battle
+       or battle.demo or battle.safari or battle.ghost
+       or battle.kind == "link" or battle.spectating
+       or not battle.player or not battle.player.mon
+       or not battle.enemy then
+      return proposed
+    end
+    local locked = battle.fightLockedAction
+                   and battle:fightLockedAction(battle.player)
+    if locked then return proposed end
+    local action = mod.exports.palaceChooseMove(battle, battle.player,
+                                                 battle.enemy,
+                                                 { unlimited = false })
+    if action then return action end
+    -- The native Palace prints this message and skips the player's action.
+    -- The resolveTurn wrapper treats nil as a lost player turn.
+    local say = battle.say or battle.sayNext
+    if say and battle.player then
+      say(battle, Strings("%s\nis incapable of\nusing its power!",
+                          battle.player.name or "POKéMON"))
+    end
+    return nil
   end
 
   -- REMEMBER MOVE: the battle object already keeps moveIndex across
@@ -1321,6 +1646,24 @@ return function(mod)
   -- is read at fire time, the request is dropped otherwise, and a stale
   -- request attached to a battle that left the stack simply never fires.
   local BattleState = require("src.battle.BattleState")
+
+  -- AUTO BATTLER: resolveTurn is the player-side action seam in the current
+  -- engine. The existing battle.enemy_action hook is trainer-side, so this
+  -- direct method wrapper changes only a free player FIGHT action. Items,
+  -- switches, and locked multi-turn actions use other paths and remain
+  -- vanilla. Guard once because hot reload re-runs the entry chunk.
+  if not Game._qolTogglesAutoBattlerInstalled then
+    Game._qolTogglesAutoBattlerInstalled = true
+    local vanillaUpdate = BattleState.update
+    BattleState.update = function(self, dt)
+      if not self._qolAutoBattleResolving
+         and mod.exports.autoBattleShouldAct(self) then
+        return mod.exports.autoBattleUpdate(self, vanillaUpdate, dt)
+      end
+      return vanillaUpdate(self, dt)
+    end
+  end
+
   if not Game._qolTogglesLastItemInstalled then
     Game._qolTogglesLastItemInstalled = true
     local vanillaUpdate = BattleState.update
@@ -1522,15 +1865,15 @@ return function(mod)
     -- with black text -- the engine's palette path renders that idiom
     -- (TextBox and every menu draw the same way); white-on-black does
     -- not survive the pass.
+    -- Wrap the overworld's screen-space overlay pass, not its world draw.
+    -- Gen1 Modern UI's presentationStack disables the overworld presenter
+    -- (and every menu layered over it, StartMenu included) when
+    -- OverworldState.draw stops being the released renderer.  drawUI is
+    -- the additive seam its own comment sanctions for location banners,
+    -- so the toast draws there and the stock draw (and its identity)
+    -- survives untouched.
     if not OverworldState._qolTogglesToastInstalled then
       OverworldState._qolTogglesToastInstalled = true
-      -- Wrap the overworld's screen-space overlay pass, not its world draw.
-      -- Gen1 Modern UI's presentationStack disables the overworld presenter
-      -- (and every menu layered over it, StartMenu included) when
-      -- OverworldState.draw stops being the released renderer.  drawUI is
-      -- the additive seam its own comment sanctions for location banners,
-      -- so the toast draws there and the stock draw (and its identity)
-      -- survives untouched.
       local vanillaDrawUI = OverworldState.drawUI
       OverworldState.drawUI = function(self)
         vanillaDrawUI(self)
@@ -1625,6 +1968,22 @@ return function(mod)
   -- restore the pre-blackout snapshot taken by the wraps below
   mod.events:on("world.blacked_out", function(ev)
     if ev and ev.save then mod.exports.keepMoneyRestore(ev.save) end
+  end)
+
+  -- -------------------------------------------------- MAP LOCATION
+
+  -- a toast naming the area when the player enters a map that is not the
+  -- one they just left -- the AUTO-REPEL banner slot (non-modal, fades
+  -- out on its own); the boot map counts as the first entry
+  mod.events:on("map.entered", function(event)
+    if not get("map_location") then return end
+    if not (event and event.mapId) then return end
+    if event.mapId == lastMapId then return end
+    lastMapId = event.mapId
+    local now = (love and love.timer and love.timer.getTime)
+                and love.timer.getTime() or os.clock()
+    mod.exports.setLocationToast(
+      mod.exports.locationName(Game.data, event.mapId, event.map), now)
   end)
 
   -- INFINITE REPEL: suppress every walking wild roll (grass, surf, caves);

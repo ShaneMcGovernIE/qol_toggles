@@ -965,6 +965,16 @@ return function(mod)
   if Game._qolTogglesInstalled then return end
   Game._qolTogglesInstalled = true
 
+  -- Save-scoped flags belong in mod.save, not the global options bucket:
+  -- starting another save must get its own S.S. Anne prompt state.
+  local function getSaveFlag(key)
+    return mod.save:get(key, false) == true
+  end
+
+  local function setSaveFlag(key, value)
+    mod.save:set(key, value == true)
+  end
+
   -- QUICK S.S. ANNE: the Vermilion dock sailor (data/scripts/story.lua
   -- onStep, gangway cell 18,30) prompts for the ticket once; every later
   -- pass walks straight through with no dialogue.  The compose chain runs
@@ -981,8 +991,8 @@ return function(mod)
       if require("src.script.Flags").get(game.save, "EVENT_SS_ANNE_LEFT") then
         return false
       end
-      if get("ssanne_prompted") then return true end
-      set("ssanne_prompted", true)
+      if getSaveFlag("ssanne_prompted") then return true end
+      setSaveFlag("ssanne_prompted", true)
       return false -- one vanilla prompt, then straight through
     end,
   })
@@ -1169,12 +1179,17 @@ return function(mod)
     for _, row in ipairs(self.rows or {}) do
       if row.ticker then row.tick = (row.tick or 0) + (dt or 0) end
     end
+    local input = self.game.input
+    -- START is read from the normal input edge here rather than from a raw
+    -- Game:gamepadpressed wrapper.  That leaves the engine's controller
+    -- dispatch untouched, which is important for the overworld's Start menu.
+    local startHelp = input:wasPressed("start")
     if self.helpRow then
       -- popup mode: B closes it, and a START/P press while it is up closes
       -- it too (the latch is consumed here, so it can never re-open the
       -- popup the instant it closes)
       self.helpTick = (self.helpTick or 0) + (dt or 0)
-      local close = self.game.input:wasPressed("b")
+      local close = input:wasPressed("b") or startHelp
       if helpRequested then
         helpRequested = false
         close = true
@@ -1184,7 +1199,7 @@ return function(mod)
     end
     -- START (controller) / P (keyboard) on a row opens its full-screen
     -- help popup; the popup owns the frame, so the list input below waits
-    if helpRequested then
+    if helpRequested or startHelp then
       helpRequested = false
       local row = self.rows[self.index]
       if row and row.help then
@@ -1193,7 +1208,6 @@ return function(mod)
         return
       end
     end
-    local input = self.game.input
     local rows = self.rows
     local cancelRow = #rows + 1
     if input:wasPressed("up") then
@@ -1274,11 +1288,10 @@ return function(mod)
     }, QolTogglesMenu)
   end })
 
-  -- START (controller) / P (keyboard) on a row shows its in-depth help,
-  -- and M arms the LAST ITEM battle shortcut while a battle is top.  The
-  -- wraps run for every mod's input chain; the latches only fire while
-  -- the right state is top, and the box itself (pushed on top) is not the
-  -- menu, so holding the key through the box never re-opens it.
+  -- P (keyboard) on a row shows its in-depth help, and M arms the LAST
+  -- ITEM battle shortcut while a battle is top.  P and M use raw key input
+  -- because they are not Game Boy buttons; START is read by the menu's
+  -- normal input edge in QolTogglesMenu:update.
   if not Game._qolTogglesHelpKeysInstalled then
     Game._qolTogglesHelpKeysInstalled = true
     local vanillaKey = Game.keypressed
@@ -1295,11 +1308,6 @@ return function(mod)
     Game.keyreleased = function(self, key)
       if key == "m" then mKeyHeld = false end
       return vanillaKeyRel(self, key)
-    end
-    local vanillaPad = Game.gamepadpressed
-    Game.gamepadpressed = function(self, joystick, button)
-      if button == "start" and menuIsTop() then helpRequested = true end
-      return vanillaPad(self, joystick, button)
     end
   end
 

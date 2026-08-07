@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.16.1] - 2026-08-07
+
+### Fixed
+
+- Fixed controller START handling so the overworld Start menu remains visible
+  when QoL Toggles is enabled.
+- Stored the QUICK S.S. ANNE prompt flag per save instead of globally, so
+  separate save files no longer share progress.
+
 ## [1.16.0] - 2026-08-07
 
 ### Added

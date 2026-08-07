@@ -705,11 +705,12 @@ do
   T.check(pushed > 0, "toggle OFF: the ticket prompt still runs")
 
   bucket.quick_ssanne = true
-  bucket.ssanne_prompted = nil
+  run.loader.modSave.qol_toggles = {}
   pushed = 0
   view.onStep(game, ow, 18, 30)
   T.check(pushed > 0, "first pass: the prompt shows once")
-  T.eq(bucket.ssanne_prompted, true, "first pass: the prompted flag is stored")
+  T.eq(run.loader.modSave.qol_toggles.ssanne_prompted, true,
+    "first pass: the prompted flag is stored in save data")
 
   pushed = 0
   local r2 = view.onStep(game, ow, 18, 30)

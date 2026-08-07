@@ -755,9 +755,30 @@ return function(mod)
 
   -- Emerald's GetBattlePalaceMoveGroup classifies by static target and
   -- power only. Gen 1's extractor does not currently expose the ROM target,
-  -- so the port uses the closest available representation. This deliberately
-  -- does not inspect effects: a non-damaging selected-target move is Support,
-  -- while a powered selected-target move is Attack, exactly as Palace does.
+  -- so the port uses the closest available representation: the target field
+  -- when present, and the Gen 1 effect enum in its place.  This deliberately
+  -- does not inspect effects beyond identifying the self-targeting moves:
+  -- a non-damaging selected-target move is Support, while a powered
+  -- selected-target move is Attack, exactly as Palace does.
+  --
+  -- The Gen 1 effect constants below are the moves the ROM's target data
+  -- would mark MOVE_TARGET_USER (stat boosts, recovery, Substitute, Splash,
+  -- Transform, Conversion, Mist, Light Screen, Reflect, Focus Energy) —
+  -- Defense, exactly as GetBattlePalaceMoveGroup groups them.  Without this
+  -- the extractor's missing target field leaves Defense structurally empty
+  -- and every Defense roll falls through to the empty-category fallback.
+  local PALACE_DEFENSE_EFFECTS = {
+    ATTACK_UP1_EFFECT = true, ATTACK_UP2_EFFECT = true,
+    DEFENSE_UP1_EFFECT = true, DEFENSE_UP2_EFFECT = true,
+    SPEED_UP1_EFFECT = true, SPEED_UP2_EFFECT = true,
+    SPECIAL_UP1_EFFECT = true, SPECIAL_UP2_EFFECT = true,
+    EVASION_UP1_EFFECT = true, ACCURACY_UP1_EFFECT = true,
+    HEAL_EFFECT = true, SPLASH_EFFECT = true, SUBSTITUTE_EFFECT = true,
+    TRANSFORM_EFFECT = true, CONVERSION_EFFECT = true, MIST_EFFECT = true,
+    LIGHT_SCREEN_EFFECT = true, REFLECT_EFFECT = true,
+    FOCUS_ENERGY_EFFECT = true,
+  }
+
   mod.exports.palaceMoveGroup = function(move)
     if not move then return "attack" end
     local target = move.target
@@ -776,6 +797,11 @@ return function(mod)
        or target == "random" or target == "both"
        or target == "foes_and_ally" then
       return (move.power or 0) == 0 and "support" or "attack"
+    end
+    -- No target in the Gen 1 data: the self-targeting effects above stand
+    -- in for MOVE_TARGET_USER.
+    if PALACE_DEFENSE_EFFECTS[move.effect] then
+      return "defense"
     end
     if move.id == "COUNTER" or move.id == "MIRROR_COAT"
        or move.id == "MIMIC" or move.id == "METRONOME"
@@ -879,9 +905,15 @@ return function(mod)
     local fallbackIndex = opts.fallbackRoll or rng(1, #fallbackPool)
     local fallback = fallbackPool[fallbackIndex]
     if opts.fallbackIncapable then return nil end
+    -- Emerald's released build rolls a 50% chance to skip the turn with
+    -- "couldn't use its power!" when the chosen category is empty.  The Gen 1
+    -- port's categories are approximations (the extractor omits the target
+    -- field Palace groups by), so empty categories are far more common than
+    -- in Emerald and the skip would spam the message.  The QoL default
+    -- always uses a move; an explicit opts.fallbackChance (0-99) re-enables
+    -- the Emerald roll -- >= 50 skips the turn.
     local failRoll = opts.fallbackChance
-    if failRoll == nil then failRoll = rng(0, 99) end
-    if failRoll >= 50 then return nil end
+    if failRoll ~= nil and failRoll >= 50 then return nil end
     return fallback
   end
 

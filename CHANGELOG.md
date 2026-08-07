@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.17.1] - 2026-08-07
+
+### Fixed
+
+- AUTO BATTLER no longer spams "is incapable of using its power!": the
+  move grouping now classifies Gen 1 self-targeting moves (stat boosts,
+  recovery, Substitute, Splash, Transform, Conversion, Mist, Light
+  Screen, Reflect, Focus Energy) as the Palace's Defense category via
+  their effect field.  The extractor omits the ROM target data Emerald's
+  GetBattlePalaceMoveGroup groups by, which left Defense structurally
+  empty — every Defense roll (and Support rolls on all-attack movesets)
+  hit the empty-category 50% incapability roll and wasted the turn.  An
+  empty category now falls back to a usable move instead; the Emerald
+  turn-skip remains available to callers that explicitly ask for it.
+
 ## [1.17.0] - 2026-08-07
 
 ### Added

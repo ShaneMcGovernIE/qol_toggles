@@ -1507,11 +1507,26 @@ T.eq(ex.palaceMoveGroup({ id = "USER_OR_SELECTED", power = 40,
                           target = "user_or_selected_user" }), "attack",
      "powered user-or-selected moves are Attack in Palace rules")
 T.eq(ex.palaceMoveGroup({ id = "SWORDS_DANCE", power = 0,
-                          target = "user" }), "defense",
+                         target = "user" }), "defense",
      "self-targeting moves are Defense moves")
+T.eq(ex.palaceMoveGroup({ id = "SWORDS_DANCE", power = 0,
+                          effect = "ATTACK_UP2_EFFECT" }), "defense",
+     "the real Gen 1 data (no target field) still groups Swords Dance as Defense")
+T.eq(ex.palaceMoveGroup({ id = "RECOVER", power = 0,
+                          effect = "HEAL_EFFECT" }), "defense",
+     "recovery moves are Defense like Emerald's MOVE_TARGET_USER")
+T.eq(ex.palaceMoveGroup({ id = "HARDEN", power = 0,
+                          effect = "DEFENSE_UP1_EFFECT" }), "defense",
+     "stat-up effects are Defense")
+T.eq(ex.palaceMoveGroup({ id = "DOUBLE_TEAM", power = 0,
+                          effect = "EVASION_UP1_EFFECT" }), "defense",
+     "evasion stat-ups are Defense")
 T.eq(ex.palaceMoveGroup({ id = "TOXIC", power = 0,
                           target = "selected" }), "support",
      "non-damaging opponent-targeting moves are Support moves")
+T.eq(ex.palaceMoveGroup({ id = "TOXIC", power = 0,
+                          effect = "POISON_EFFECT" }), "support",
+     "the real data shape keeps foe-targeting status as Support")
 T.eq(ex.palaceMoveGroup({ id = "COUNTER", power = 0,
                           target = "selected" }), "support",
      "Counter remains Support like the Gen 3 Palace")
@@ -1572,6 +1587,30 @@ do
                            { nature = "LONELY", categoryRoll = 0,
                              moveRoll = 1 }).id, "FIX_TACKLE",
        "low HP still chooses a usable move from the selected category")
+end
+
+do
+  -- the Defense category is reachable with real Gen 1 data (no target
+  -- field): the stat-up move groups by effect and a Defense roll picks it
+  -- instead of falling through to the empty-category fallback
+  local data = { moves = {
+    FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
+    SWORDS_DANCE = { id = "SWORDS_DANCE", power = 0, type = "NORMAL",
+                     effect = "ATTACK_UP2_EFFECT" },
+  } }
+  local battle = { data = data, rng = function() return 0 end,
+                   ruleset = { enemyUnlimitedPP = true } }
+  local battler = {
+    mon = { dvs = { attack = 0, defense = 15, speed = 0, special = 0 },
+            statExp = {}, hp = 100, stats = { hp = 100 }, status = nil },
+    curMoves = { { id = "FIX_TACKLE", pp = 10 },
+                 { id = "SWORDS_DANCE", pp = 10 } },
+  }
+  -- BOLD (defense-heavy, thresholds 30/50): roll 40 lands in Defense
+  local picked = ex.palaceChooseMove(battle, battler, nil,
+    { nature = "BOLD", categoryRoll = 40, moveRoll = 1 })
+  T.eq(picked.id, "SWORDS_DANCE",
+       "a Defense roll picks the stat-up move grouped by effect")
 end
 
 do
@@ -1648,12 +1687,20 @@ do
                                        randomWithinCategory = true,
                                        unlimited = false })
   T.eq(picked.id, "FIX_TACKLE", "an empty Palace category falls back to a move")
+  local default = ex.palaceChooseMove(fallbackBattle, fallbackMon, nil,
+                                      { nature = "LONELY", categoryRoll = 99,
+                                        fallbackRoll = 1,
+                                        randomWithinCategory = true,
+                                        unlimited = false })
+  T.eq(default.id, "FIX_TACKLE",
+       "the QoL default falls back without the turn-wasting incapability roll")
   local skipped = ex.palaceChooseMove(fallbackBattle, fallbackMon, nil,
                                       { nature = "LONELY", categoryRoll = 99,
                                         fallbackRoll = 1, fallbackChance = 50,
                                         randomWithinCategory = true,
                                         unlimited = false })
-  T.eq(skipped, nil, "the fallback has Emerald's 50% incapability roll")
+  T.eq(skipped, nil,
+       "an explicit fallbackChance >= 50 re-enables Emerald's skip")
   bucket.auto_battler = true
   local queued = {}
   local liveFallback = {
@@ -1669,8 +1716,27 @@ do
   liveFallback.player.name = "FIXMON"
   local wait = ex.autoBattleAction(liveFallback,
                                     { id = "FIX_SCRATCH", pp = 10 })
-  T.eq(wait, nil, "a failed live fallback has no player action")
-  T.eq(#queued, 1, "a failed live fallback queues the incapability text")
+  T.eq(wait.id, "FIX_TACKLE",
+       "the live fallback uses a move instead of wasting the turn")
+  T.eq(#queued, 0, "no incapability text for the QoL fallback")
+  -- the incapability text survives for the one case it is truthful: a mon
+  -- with no usable moves at all (all PP spent / every slot disabled)
+  local emptyMon = {
+    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
+            statExp = {}, hp = 100, stats = { hp = 100 } },
+    curMoves = { { id = "FIX_SCRATCH", pp = 0 } },
+  }
+  local emptyBattle = {
+    data = fallbackBattle.data, player = emptyMon,
+    enemy = { mon = { status = nil }, curTypes = { "NORMAL" } },
+    fightLockedAction = function() return nil end,
+    rng = function(a, b) return a == 0 and 99 or 1 end,
+    say = function(_, text) queued[#queued + 1] = text end,
+  }
+  local none = ex.autoBattleAction(emptyBattle,
+                                   { id = "FIX_SCRATCH", pp = 10 })
+  T.eq(none, nil, "a mon with no usable moves has no action")
+  T.eq(#queued, 1, "and the incapability text announces the skipped turn")
   bucket.auto_battler = false
   T.eq(ex.autoBattleAction(liveFallback, { id = "FIX_SCRATCH", pp = 10 }).id,
        "FIX_SCRATCH", "turning AUTO BATTLER off preserves the action")

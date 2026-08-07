@@ -35,7 +35,7 @@ return {
       "an AUTO CUT switch cuts trees the player walks into when a party mon knows CUT",
       "a RUN (HOLD B) switch doubles foot speed while B is held, off the bike and off the surfboard",
       "a MOUSE CAM LOCK switch stops Dramatic Shape's battle camera following the mouse (stick, drag and zoom still work)",
-      "an AUTO BATTLER switch makes the player's Pokémon choose moves in Battle Palace style, mapping Gen 1 DVs and stat EXP to an approximate Palace style; low HP latches until switch-out; an empty category has Emerald's 50% fallback and incapability message; disabling the toggle preserves the original action",
+      "an AUTO BATTLER switch makes the player's Pokémon choose moves in Battle Palace style, mapping Gen 1 DVs and stat EXP to an approximate Palace style; low HP latches until switch-out; an empty category falls back to a usable move instead of the Emerald 50% turn-skip; disabling the toggle preserves the original action",
       "a MAP LOCATION switch toasts the name of the area when the player enters a new map, in the AUTO-REPEL banner style, with corrected names where the town map data lies (the Route 10 PokeCenter reads as ROCK TUNNEL there)",
     },
     added = {

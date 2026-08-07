@@ -127,9 +127,11 @@ love .
   Gen 1's normal AI scoring. Gen 1 has no Natures, so the mod derives an
   approximate style from the four DVs and stat EXP. Items, switching, forced
   moves and trainer AI are unchanged. The low-HP profile latches until that
-  Pokémon switches out. When the selected category is empty, the Emerald-
-  style random fallback has a 50% chance to lose the turn and shows the
-  incapability message. If the toggle is switched off, the original player
+  Pokémon switches out. When the selected category is empty, a usable move
+  from another category is used instead — the turn is never wasted on the
+  Emerald "couldn't use its power" skip, because Gen 1's missing target
+  data makes empty categories far more common than in Emerald and the skip
+  would spam that message. If the toggle is switched off, the original player
   action proceeds. Ships OFF. This applies to free player turns in ordinary
   wild/trainer battles; link battles remain synchronized and unchanged.
 - **MAP LOCATION** — when ON, entering a new area shows its name in the

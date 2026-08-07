@@ -99,6 +99,12 @@ Play the game: `love .` from the engine root.
 
 ## Pitfalls
 
+0. **The game never runs the dev trees.** The app loads mods from the
+   *installed* copy at `~/Library/Application Support/pokemon-love2d/mods/<id>/`
+   — syncing the mounted Gen1RecompMods copy is not enough. After changing
+   behavior, copy the mod files there too (or re-import the release zip) and
+   restart the game; mods load at boot and the running instance keeps the old
+   code. Active save: `~/Library/Application Support/pokemon-love2d/saves/red/slot1.lua`.
 1. **Drifted copies** (see Dev environment) — debug against the wrong copy and
    your fix "doesn't work". `diff` the two `main.lua`s before touching anything.
 2. **`POKEPORT_DATA_DIR` is mandatory** for `qol_toggles_test.lua`: without it,
@@ -116,3 +122,5 @@ Play the game: `love .` from the engine root.
    from vanilla behavior.
 5. `modkit pack` treats warnings as fatal — anything requiring engine modules
    must stay out of the shipped mod (`.modkitignore` covers `tests/`).
+6. **The release workflow skips md-only pushes** (`paths-ignore: '**.md'`) — a
+   docs-only commit won't trigger a release; only code/manifest changes do.

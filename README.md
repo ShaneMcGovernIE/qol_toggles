@@ -94,6 +94,14 @@ love .
 - **BULK MART** — mart quantity prompts (BUY and SELL) open at 10
   instead of 1, still capped by money and bag space.  The mod
   manager's own numeric option boxes are never touched.
+- **BULK COINS** — the Celadon Game Corner clerk greets you, asks
+  "Would you like to purchase some COINS?", and offers 50, 500 or
+  9,999 coins at a time (¥1000 / ¥10000 / ¥199980 — the vanilla
+  20¥-per-coin rate) instead of the fixed 50.  Tiers that would
+  overflow the 9,999 coin cap drop out of the list, and a **CUSTOM**
+  row opens a four-box digit picker (up/down cycles each digit 0–9,
+  left/right moves between boxes) for any amount from 1 to 9,999.
+  With the toggle OFF the clerk is exactly vanilla.
 - **LIGHTS ON** — dark caves and tunnels render fully lit with no FLASH
   needed; FLASH itself still works and is then harmless.
 - **REMEMBER MOVE** — the battle FIGHT move cursor stays where you left

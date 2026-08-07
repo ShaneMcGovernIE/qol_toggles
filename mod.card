@@ -28,6 +28,7 @@ return {
       "a HEAL AFTER BATTLE switch fully heals the party (HP, status, PP) whenever a battle ends",
       "an AUTO-REPEL switch replaces a worn-off repel from the bag automatically, strongest first, announced by an on-screen toast",
       "a BULK MART switch opens mart quantity prompts at 10 for BUY and SELL",
+      "a BULK COINS switch re-asks the Celadon Game Corner clerk's offer and lets him sell 50, 500 or 9,999 coins at a time, or any amount via a CUSTOM four-digit picker (digits 0-9)",
       "a LIGHTS ON switch renders dark caves and tunnels fully lit without FLASH",
       "a REMEMBER MOVE switch keeps the FIGHT move cursor on the last move used across turns",
       "a KEEP MONEY switch stops blackouts from halving the player's money",
@@ -40,7 +41,7 @@ return {
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL and REMEMBER MOVE ship ON; the other twenty ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL and REMEMBER MOVE ship ON; the other twenty-one ship OFF.  Toggles persist in options.lua, independent of save files",
       "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",
       "AUTO CUT only fires when a party mon knows CUT (FIELD MOVES ALL does not extend to it), and the step is consumed by the cut text + animation",
       "NO ENCOUNTER DUPES is session-scoped, so a restart forgets the last species",

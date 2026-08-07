@@ -41,7 +41,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 29, "twenty-nine toggles in the submenu")
+T.eq(#rows, 30, "thirty toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -66,11 +66,12 @@ T.eq(rows[21].id, "instant_fish", "toggle 21: instant fish")
 T.eq(rows[22].id, "heal_battle", "toggle 22: heal after battle")
 T.eq(rows[23].id, "auto_repel", "toggle 23: auto-repel")
 T.eq(rows[24].id, "bulk_mart", "toggle 24: bulk mart")
-T.eq(rows[25].id, "lights_on", "toggle 25: lights on")
-T.eq(rows[26].id, "remember_move", "toggle 26: remember move")
-T.eq(rows[27].id, "keep_money", "toggle 27: keep money")
-T.eq(rows[28].id, "auto_cut", "toggle 28: auto cut")
-T.eq(rows[29].id, "run_hold_b", "toggle 29: run (hold B)")
+T.eq(rows[25].id, "bulk_coins", "toggle 25: bulk coins")
+T.eq(rows[26].id, "lights_on", "toggle 26: lights on")
+T.eq(rows[27].id, "remember_move", "toggle 27: remember move")
+T.eq(rows[28].id, "keep_money", "toggle 28: keep money")
+T.eq(rows[29].id, "auto_cut", "toggle 29: auto cut")
+T.eq(rows[30].id, "run_hold_b", "toggle 30: run (hold B)")
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
@@ -97,6 +98,7 @@ T.eq(ex.defaultFor("instant_fish"), false, "INSTANT FISH ships OFF")
 T.eq(ex.defaultFor("heal_battle"), false, "HEAL AFTER BATTLE ships OFF")
 T.eq(ex.defaultFor("auto_repel"), true, "AUTO-REPEL ships ON")
 T.eq(ex.defaultFor("bulk_mart"), false, "BULK MART ships OFF")
+T.eq(ex.defaultFor("bulk_coins"), false, "BULK COINS ships OFF")
 T.eq(ex.defaultFor("lights_on"), false, "LIGHTS ON ships OFF")
 T.eq(ex.defaultFor("remember_move"), true, "REMEMBER MOVE ships ON")
 T.eq(ex.defaultFor("keep_money"), false, "KEEP MONEY ships OFF")
@@ -1017,8 +1019,8 @@ for _, spec in ipairs({ -- the ids are stable, from the TOGGLES list
   "catch_exp", "instant_flee", "remember_cursor", "heal_map_change",
   "quick_ssanne", "last_item", "free_great_ball", "mouse_cam_lock",
   "no_enc_dupes", "instant_fish", "heal_battle", "auto_repel",
-  "bulk_mart", "lights_on", "remember_move", "keep_money", "auto_cut",
-  "run_hold_b",
+  "bulk_mart", "bulk_coins", "lights_on", "remember_move", "keep_money",
+  "auto_cut", "run_hold_b",
 }) do
   local help = ex.helpFor(spec)
   T.check(type(help) == "string" and #help > 0,
@@ -1275,6 +1277,137 @@ do
   local save = { inventory = {} }
   T.eq(ex.refillForStep(save, nil, 500), nil, "no repel: refillForStep no-ops")
   T.eq(save.repelSteps, nil, "and steps are untouched")
+end
+
+-- ------- BULK COINS (the Game Corner clerk's quantity tiers)
+
+do
+  local opts = ex.coinOptions(0, false)
+  T.eq(#opts, 1, "vanilla: only the 50-coin tier")
+  T.eq(opts[1].qty, 50, "50 coins")
+  T.eq(opts[1].cost, 1000, "50 coins cost ¥1000")
+end
+
+do
+  local opts = ex.coinOptions(0, true)
+  T.eq(#opts, 3, "bulk: 50 / 500 / 9999")
+  T.eq(opts[1].qty, 50, "first tier is 50")
+  T.eq(opts[2].qty, 500, "second tier is 500")
+  T.eq(opts[2].cost, 10000, "500 coins cost ¥10000")
+  T.eq(opts[3].qty, 9999, "third tier is 9999")
+  T.eq(opts[3].cost, 199980, "9999 coins cost ¥199980")
+end
+
+do
+  local opts = ex.coinOptions(500, true)
+  T.eq(#opts, 2, "partial room drops the tiers that would overflow")
+  T.eq(opts[1].qty, 50, "50 still fits")
+  T.eq(opts[2].qty, 500, "500 fits (500 + 500 <= 9999)")
+end
+
+do
+  local opts = ex.coinOptions(9990, true)
+  T.eq(#opts, 0, "a near-full case offers nothing")
+end
+
+do
+  local save = { money = 1000, coins = 0 }
+  T.eq(ex.buyCoins(save, 50), true, "an affordable tier buys")
+  T.eq(save.money, 0, "money deducted")
+  T.eq(save.coins, 50, "coins granted")
+end
+
+do
+  local save = { money = 500, coins = 0 }
+  T.eq(ex.buyCoins(save, 50), false, "an unaffordable tier refuses")
+  T.eq(save.money, 500, "money untouched")
+  T.eq(save.coins, 0, "coins untouched")
+end
+
+do
+  local save = { money = 199980, coins = 9950 }
+  T.eq(ex.buyCoins(save, 9999), true, "a bulk buy grants coins")
+  T.eq(save.coins, 9999, "clamped to the 9999 cap")
+  T.eq(save.money, 0, "the full tier price is charged")
+end
+
+do
+  local raw = "Welcome to ROCKET\nGAME CORNER!\fDo you need some\ngame coins?\fIt's ¥1000 for 50\ncoins. Would you\n\011like some?"
+  T.eq(ex.clerkOffer(raw, false), raw, "vanilla keeps the extracted offer")
+  T.eq(ex.clerkOffer(raw, true),
+       "Welcome to ROCKET\nGAME CORNER!\fWould you like to\npurchase some\nCOINS?",
+       "the bulk path keeps the welcome and re-asks")
+  T.eq(ex.clerkOffer("no page break", true),
+       "no page break\fWould you like to\npurchase some\nCOINS?",
+       "a welcome-less line still gets the question")
+end
+
+-- ------- BULK COINS custom picker (the 4-digit quantity popout)
+
+local pickerPressed = {}
+local function pickerPress(p, k)
+  pickerPressed[k] = true
+  p:update(1 / 60)
+  pickerPressed[k] = nil
+end
+
+local function newPicker(chosen)
+  return ex.coinDigitPicker(
+    { input = { wasPressed = function(_, k) return pickerPressed[k] == true end },
+      stack = { pop = function() end } },
+    { unitPrice = 20, onDone = chosen })
+end
+
+do
+  local chosen
+  local p = newPicker(function(q) chosen = q end)
+  T.eq(getmetatable(p).isOpaque, true,
+       "the picker is opaque (the list beneath is never drawn)")
+  T.eq(p:value(), 1111, "the picker starts at 1111")
+  pickerPress(p, "up")
+  T.eq(p:value(), 2111, "up raises the active digit")
+  pickerPress(p, "left")
+  T.eq(p.box, 4, "left moves to the next box (wrapping)")
+  pickerPress(p, "down")
+  T.eq(p:value(), 2110, "down lowers the digit, 1 to 0")
+  pickerPress(p, "down")
+  T.eq(p:value(), 2119, "down wraps 0 to 9")
+  pickerPress(p, "right")
+  T.eq(p.box, 1, "right moves back across the boxes")
+  pickerPress(p, "up") pickerPress(p, "up") pickerPress(p, "up")
+  pickerPress(p, "up") pickerPress(p, "up") pickerPress(p, "up")
+  pickerPress(p, "up") pickerPress(p, "up") pickerPress(p, "up")
+  T.eq(p:value(), 1119, "nine ups wrap the digit 2 back to 1")
+  p.digits = { 9, 9, 9, 9 }
+  pickerPress(p, "up")
+  T.eq(p.digits[1], 0, "up at 9 wraps to 0")
+  p.digits = { 0, 0, 5, 0 }
+  T.eq(p:value(), 50, "leading zeroes read as the plain amount")
+  p.digits = { 0, 0, 0, 0 }
+  pickerPress(p, "a")
+  T.eq(chosen, nil, "A at zero is ignored")
+  T.eq(p.box, 1, "the picker stays up at zero")
+  p.digits = { 1, 2, 3, 4 }
+  T.eq(p:value(), 1234, "the value reads the four digits")
+  pickerPress(p, "a")
+  T.eq(chosen, 1234, "A confirms with the value")
+end
+
+do
+  local chosen, popped = nil, 0
+  local p = ex.coinDigitPicker(
+    { input = { wasPressed = function(_, k) return pickerPressed[k] == true end },
+      stack = { pop = function() popped = popped + 1 end } },
+    { onDone = function(q) chosen = q end })
+  pickerPressed.a = true
+  p:update(1 / 60)
+  pickerPressed.a = nil
+  T.eq(popped, 1, "confirm pops the picker")
+  pickerPressed.b = true
+  p:update(1 / 60)
+  pickerPressed.b = nil
+  T.eq(popped, 2, "cancel pops the picker")
+  T.eq(chosen, nil, "B cancels with nil")
 end
 
 -- ------- RUN (HOLD B) (runFrames halves the per-step frame count)

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.16.0] - 2026-08-07
+
+### Added
+
+- BULK COINS: the Celadon Game Corner clerk greets you, asks
+  "Would you like to purchase some COINS?" and offers 50, 500 or
+  9,999 coins at a time (¥1000 / ¥10000 / ¥199980, the vanilla
+  20¥-per-coin rate) instead of the fixed 50, plus a CUSTOM row that
+  opens a four-box digit picker (up/down cycles each digit 0-9,
+  left/right moves between boxes) for any amount from 1 to 9,999.
+  Tiers that would overflow the 9,999 coin cap drop out of the list,
+  and with the toggle OFF the clerk is byte-for-byte vanilla.  Ships
+  OFF.
+
 ## [1.15.0] - 2026-08-07
 
 ### Added

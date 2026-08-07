@@ -45,6 +45,8 @@
 --   RUN (HOLD B)        hold B to move twice as fast on foot
 --   MOUSE CAM LOCK   Dramatic Shape's battle camera no longer follows the
 --                    mouse (the right stick, a drag and the zoom still work)
+--   BULK COINS         the Celadon Game Corner clerk sells 50, 500 or
+--                      9,999 coins at a time
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -226,6 +228,8 @@ local TOGGLES = {
     help = "When a repel\nwears off, the\nstrongest one in\nthe bag is used\nfor you.\vOut of repels:\nit wears off." },
   { key = "bulk_mart", label = "BULK MART", default = false,
     help = "Mart quantity\nprompts start\nat 10 instead\nof 1.\vStill capped by\nyour money and\nbag space." },
+  { key = "bulk_coins", label = "BULK COINS", default = false,
+    help = "The Celadon Game\nCorner clerk also\nsells 500 and\n9,999 coins.\vCUSTOM: 4 digit\nboxes, 0-9 each\n(up to 9999)." },
   { key = "lights_on", label = "LIGHTS ON", default = false,
     help = "Dark caves and\ntunnels render\nfully lit.\vNo FLASH\nneeded." },
   { key = "remember_move", label = "REMEMBER MOVE", default = true,
@@ -491,6 +495,122 @@ return function(mod)
     if id and save then save.repelSteps = save.repelSteps + 1 end
     return id
   end
+
+  -- BULK COINS: the Celadon Game Corner clerk's quantity tiers (20¥ per
+  -- coin, the vanilla rate).  The 50-coin tier keeps vanilla's gate
+  -- (refuse only when the case has < 10 coins of room); the bulk tiers
+  -- need real room or the money is wasted on coins the 9999 cap eats.
+  local COIN_RATE = 20
+  mod.exports.coinOptions = function(coins, bulk)
+    local options = {}
+    coins = coins or 0
+    if coins < 9990 then
+      options[#options + 1] = { qty = 50, cost = 50 * COIN_RATE }
+    end
+    if bulk then
+      if coins + 500 <= 9999 then
+        options[#options + 1] = { qty = 500, cost = 500 * COIN_RATE }
+      end
+      if coins + 9999 <= 9999 then
+        options[#options + 1] = { qty = 9999, cost = 9999 * COIN_RATE }
+      end
+    end
+    return options
+  end
+
+  -- the clerk's offer line: the vanilla flow keeps the extracted text
+  -- byte-for-byte; the bulk path keeps the welcome page (up to the first
+  -- page break) and re-asks with a yes/no prompt of its own
+  mod.exports.clerkOffer = function(raw, bulk)
+    if not bulk then return raw end
+    local welcome = raw:match("^([^\f]+)") or raw
+    return welcome .. "\fWould you like to\npurchase some\nCOINS?"
+  end
+
+  -- deduct money and grant coins (clamped to the 9999 cap); false when
+  -- the player cannot afford the tier
+  mod.exports.buyCoins = function(save, qty)
+    local cost = qty * COIN_RATE
+    if not save or save.money < cost then return false end
+    save.money = save.money - cost
+    save.coins = math.min(9999, (save.coins or 0) + qty)
+    return true
+  end
+
+  -- the CUSTOM picker: four digit boxes (each 1-9, up/down cycles with
+  -- wrap), left/right moves the active box; A confirms the 4-digit
+  -- amount, B cancels back to the HOW MANY? list.  Opaque so the list
+  -- beneath is not drawn at all (no text can peek around the panel),
+  -- and the panel itself is a full white sheet (the mod's white-pass
+  -- idiom).  Exported so the headless suite can drive it.
+  local CoinDigitPicker = {}
+  CoinDigitPicker.__index = CoinDigitPicker
+  CoinDigitPicker.isOpaque = true
+
+  function CoinDigitPicker.new(game, opts)
+    opts = opts or {}
+    return setmetatable({
+      game = game,
+      digits = { 1, 1, 1, 1 },
+      box = 1,
+      unitPrice = opts.unitPrice,
+      onDone = opts.onDone,
+    }, CoinDigitPicker)
+  end
+
+  function CoinDigitPicker:value()
+    return self.digits[1] * 1000 + self.digits[2] * 100
+         + self.digits[3] * 10 + self.digits[4]
+  end
+
+  function CoinDigitPicker:update(dt)
+    local input = self.game.input
+    if input:wasPressed("up") then
+      self.digits[self.box] = (self.digits[self.box] + 1) % 10
+    elseif input:wasPressed("down") then
+      self.digits[self.box] = (self.digits[self.box] - 1) % 10
+    elseif input:wasPressed("left") then
+      self.box = self.box > 1 and self.box - 1 or 4
+    elseif input:wasPressed("right") then
+      self.box = self.box < 4 and self.box + 1 or 1
+    elseif input:wasPressed("a") then
+      if self:value() == 0 then return end -- buying 0 coins is meaningless
+      self.game.stack:pop()
+      if self.onDone then self.onDone(self:value()) end
+    elseif input:wasPressed("b") then
+      self.game.stack:pop()
+      if self.onDone then self.onDone(nil) end
+    end
+  end
+
+  function CoinDigitPicker:draw()
+    local Font = require("src.render.Font")
+    local g = love.graphics
+    -- full white sheet: covers the HOW MANY? list underneath (opaque,
+    -- so the list is not drawn at all) with nothing peeking at the seams
+    Font.drawBox(0, 0, 20, 18)
+    -- title
+    g.setColor(0, 0, 0, 1)
+    Font.draw("CUSTOM", 56, 20)
+    -- the four digit boxes: 3x3 tiles (24x24), so the glyph sits in the
+    -- exact center cell, one tile clear of the border on every side
+    for i = 1, 4 do
+      local tx = 1 + (i - 1) * 5
+      Font.drawBox(tx, 6, 3, 3)
+      g.setColor(0, 0, 0, 1)
+      Font.draw(tostring(self.digits[i]), (tx + 1) * 8, 56)
+      g.setColor(1, 1, 1, 1)
+    end
+    -- the active box's cursor (the engine's more-arrow glyph)
+    g.setColor(0, 0, 0, 1)
+    Font.drawCode(0xEE, (1 + (self.box - 1) * 5) * 8 + 8, 72)
+    -- the live price, centered
+    local price = ("¥%d"):format(self:value() * (self.unitPrice or 0))
+    Font.draw(price, math.floor((160 - Font.width(price)) / 2), 88)
+    g.setColor(1, 1, 1, 1)
+  end
+
+  mod.exports.coinDigitPicker = CoinDigitPicker.new
 
   -- RUN (HOLD B): halve the per-step frame count (double foot speed)
   -- while B is held, off the bike and off the surfboard
@@ -865,6 +985,147 @@ return function(mod)
       set("ssanne_prompted", true)
       return false -- one vanilla prompt, then straight through
     end,
+  })
+
+  -- BULK COINS: the Celadon Game Corner clerk is a talk script, and talk
+  -- entries are single-winner, so this handler replaces the base one for
+  -- both clerk text ids (Red's CLERK1 and Yellow's CLERK alias).  The
+  -- OFF path below replicates the vanilla flow byte-for-byte -- same
+  -- texts, same gates -- and the ON path swaps the fixed 50-coin offer
+  -- for a HOW MANY? list of the tiers that fit the coin case.
+  local function gameCornerClerk(game, ow, npc, done)
+    local TextBox = require("src.render.TextBox")
+    local ListMenu = require("src.ui.ListMenu")
+    local Font = require("src.render.Font")
+    local t = game.data.text
+    local function line(suffix, fallback)
+      return t["_GameCornerClerk1" .. suffix]
+             or t["_GameCornerClerk" .. suffix]
+             or fallback
+    end
+    -- GameCornerDrawCoinBox: the money/coin window stands for the whole
+    -- exchange (a draw-only state under the dialogue, redrawn every
+    -- frame from the live save)
+    local coinBox = { draw = function()
+      Font.drawBox(11, 0, 9, 7)
+      love.graphics.setColor(0, 0, 0, 1)
+      Font.draw(Strings("MONEY"), 96, 16)
+      local money = ("¥%d"):format(game.save.money or 0)
+      Font.draw(money, 152 - Font.width(money), 24)
+      Font.draw(Strings("COIN"), 96, 32)
+      local coins = ("%d"):format(game.save.coins or 0)
+      Font.draw(coins, 152 - Font.width(coins), 40)
+      love.graphics.setColor(1, 1, 1, 1)
+    end }
+    game.stack:push(coinBox)
+    local function finish()
+      game.stack:pop()
+      done()
+    end
+    local offer = line("DoYouNeedSomeGameCoinsText",
+                       "Do you need some\ngame coins?\f¥1000 for 50.")
+    offer = mod.exports.clerkOffer(offer, get("bulk_coins"))
+    game.stack:push(TextBox.new(game, offer, nil, { choice = function(yes)
+      if not yes then
+        game.stack:push(TextBox.new(game,
+          line("PleaseComePlaySometimeText",
+               "No? Please come\nplay sometime!"), finish))
+        return
+      end
+      if not game.save.inventory.COIN_CASE then
+        game.stack:push(TextBox.new(game,
+          line("DontHaveCoinCaseText",
+               "You don't have a\nCOIN CASE!"), finish))
+        return
+      end
+      local options = mod.exports.coinOptions(game.save.coins,
+                                              get("bulk_coins"))
+      if #options == 0 then
+        game.stack:push(TextBox.new(game,
+          line("CoinCaseIsFullText",
+               "Oops! Your COIN\nCASE is full."), finish))
+        return
+      end
+      if #options == 1 then
+        -- the vanilla path: one tier, the same money gate and thanks text
+        local o = options[1]
+        if game.save.money < o.cost then
+          game.stack:push(TextBox.new(game,
+            line("CantAffordTheCoinsText",
+                 "You can't afford\nthe coins!"), finish))
+          return
+        end
+        mod.exports.buyCoins(game.save, o.qty)
+        game.stack:push(TextBox.new(game,
+          line("ThanksHereAre50CoinsText",
+               "Thanks! Here are\nyour 50 coins!"), finish))
+        return
+      end
+      -- the bulk path: pick the tier from a list (the prize counters in
+      -- this same room use the same ListMenu idiom), with CUSTOM at the
+      -- bottom opening the 4-digit picker
+      local items = {}
+      for _, o in ipairs(options) do
+        items[#items + 1] = {
+          value = o,
+          label = Strings("%d COINS", o.qty),
+          right = ("¥%d"):format(o.cost),
+        }
+      end
+      items[#items + 1] = { value = "custom", label = "CUSTOM" }
+      local list
+      list = ListMenu.new(game, "HOW MANY?", items, {
+        footer = ("COINS %d"):format(game.save.coins or 0),
+        onChoose = function(item)
+          if item.value == "custom" then
+            game.stack:push(mod.exports.coinDigitPicker(game, {
+              unitPrice = COIN_RATE,
+              onDone = function(qty)
+                if not qty then
+                  list.footer = ("COINS %d"):format(game.save.coins or 0)
+                  return
+                end
+                local cost = qty * COIN_RATE
+                if game.save.money < cost then
+                  list.footer = line("CantAffordTheCoinsText",
+                                     "You can't afford\nthe coins!")
+                  return
+                end
+                if (game.save.coins or 0) + qty > 9999 then
+                  list.footer = line("CoinCaseIsFullText",
+                                     "Oops! Your COIN\nCASE is full.")
+                  return
+                end
+                mod.exports.buyCoins(game.save, qty)
+                list:close()
+                game.stack:push(TextBox.new(game,
+                  Strings("Thanks! Here are\nyour %d coins!", qty), finish))
+              end,
+            }))
+            return
+          end
+          local o = item.value
+          if game.save.money < o.cost then
+            list.footer = line("CantAffordTheCoinsText",
+                               "You can't afford\nthe coins!")
+            return
+          end
+          mod.exports.buyCoins(game.save, o.qty)
+          list:close()
+          game.stack:push(TextBox.new(game,
+            Strings("Thanks! Here are\nyour %d coins!", o.qty), finish))
+        end,
+        onCancel = finish,
+      })
+      game.stack:push(list)
+    end }))
+  end
+
+  mod.content.map_scripts:register("GAME_CORNER", {
+    talk = {
+      TEXT_GAMECORNER_CLERK1 = gameCornerClerk,
+      TEXT_GAMECORNER_CLERK = gameCornerClerk,
+    },
   })
 
   -- ------------------------------------------------------- the OPTIONS row

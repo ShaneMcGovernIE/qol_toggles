@@ -46,7 +46,7 @@ Run from the engine root (`cd /Users/shanemcgovern/dev/gen1recomp`). Both suites
 run against the engine's fixture dataset — no ROM, no generated data needed:
 
 ```sh
-POKEPORT_DATA_DIR="$PWD/tests/fixture_data" luajit mods/qol_toggles/tests/qol_toggles_test.lua   # 657/657 checks
+POKEPORT_DATA_DIR="$PWD/tests/fixture_data" luajit mods/qol_toggles/tests/qol_toggles_test.lua   # 716/716 checks
 POKEPORT_DATA_DIR="$PWD/tests/fixture_data" luajit mods/qol_toggles/tests/wrap_compose_test.lua   # 6/6 checks
 ```
 

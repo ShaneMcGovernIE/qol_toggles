@@ -41,7 +41,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 18, "eighteen toggles in the submenu")
+T.eq(#rows, 29, "twenty-nine toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -60,6 +60,17 @@ T.eq(rows[15].id, "heal_map_change", "toggle 15: heal on map change")
 T.eq(rows[16].id, "quick_ssanne", "toggle 16: quick S.S. Anne")
 T.eq(rows[17].id, "last_item", "toggle 17: last item in battle")
 T.eq(rows[18].id, "free_great_ball", "toggle 18: free Great Ball bonus")
+T.eq(rows[19].id, "mouse_cam_lock", "toggle 19: lock Dramatic Shape's mouse camera")
+T.eq(rows[20].id, "no_enc_dupes", "toggle 20: no encounter dupes")
+T.eq(rows[21].id, "instant_fish", "toggle 21: instant fish")
+T.eq(rows[22].id, "heal_battle", "toggle 22: heal after battle")
+T.eq(rows[23].id, "auto_repel", "toggle 23: auto-repel")
+T.eq(rows[24].id, "bulk_mart", "toggle 24: bulk mart")
+T.eq(rows[25].id, "lights_on", "toggle 25: lights on")
+T.eq(rows[26].id, "remember_move", "toggle 26: remember move")
+T.eq(rows[27].id, "keep_money", "toggle 27: keep money")
+T.eq(rows[28].id, "auto_cut", "toggle 28: auto cut")
+T.eq(rows[29].id, "run_hold_b", "toggle 29: run (hold B)")
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
@@ -80,6 +91,17 @@ T.eq(ex.defaultFor("heal_map_change"), false, "HEAL ON MAP CHANGE ships OFF")
 T.eq(ex.defaultFor("quick_ssanne"), false, "QUICK S.S. ANNE ships OFF")
 T.eq(ex.defaultFor("last_item"), false, "LAST ITEM (M) ships OFF")
 T.eq(ex.defaultFor("free_great_ball"), false, "POKEBALL BONUS ships OFF")
+T.eq(ex.defaultFor("mouse_cam_lock"), false, "MOUSE CAM LOCK ships OFF")
+T.eq(ex.defaultFor("no_enc_dupes"), false, "NO ENCOUNTER DUPES ships OFF")
+T.eq(ex.defaultFor("instant_fish"), false, "INSTANT FISH ships OFF")
+T.eq(ex.defaultFor("heal_battle"), false, "HEAL AFTER BATTLE ships OFF")
+T.eq(ex.defaultFor("auto_repel"), true, "AUTO-REPEL ships ON")
+T.eq(ex.defaultFor("bulk_mart"), false, "BULK MART ships OFF")
+T.eq(ex.defaultFor("lights_on"), false, "LIGHTS ON ships OFF")
+T.eq(ex.defaultFor("remember_move"), true, "REMEMBER MOVE ships ON")
+T.eq(ex.defaultFor("keep_money"), false, "KEEP MONEY ships OFF")
+T.eq(ex.defaultFor("auto_cut"), false, "AUTO CUT ships OFF")
+T.eq(ex.defaultFor("run_hold_b"), false, "RUN (HOLD B) ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -416,6 +438,50 @@ do
   MoveLearnMenu.update(m, 1/60)
   T.eq(m.mon.moves[1].id, "FIX_EMBER", "toggle ON: the HM is forgotten")
   T.eq(pushes, 0, "toggle ON: no refusal textbox")
+end
+
+do
+  -- engine builds v0.1.59..v0.1.63 ran the old ChoiceBox flow: the real
+  -- MoveLearnMenu never sets selecting (nil), the forget list is live
+  -- whenever the menu is top.  The wrap and forgetUpdate must treat nil
+  -- as "forget list live" or the toggle silently dies there and the
+  -- vanilla HM gate fires even with FORGETTABLE HMs on.
+  local MoveLearnMenu = require("src.ui.MoveLearnMenu")
+  local function press(btn)
+    return { wasPressed = function(_, k) return k == btn end }
+  end
+  local pushes = 0
+  local function oldEngineMenu(input)
+    local m = setmetatable({
+      game = { input = input,
+               data = { moves = { FLY = { name = "FLY" },
+                                  FIX_EMBER = { name = "FIX EMBER", pp = 15 } } },
+               stack = { push = function() pushes = pushes + 1 end } },
+      mon = { moves = { { id = "FLY", pp = 5 },
+                        { id = "FIX_TACKLE", pp = 10 } } },
+      newMoveId = "FIX_EMBER",
+      index = 1,
+      confirmAbandon = function() end,
+      finish = function() end,
+    }, { __index = MoveLearnMenu })
+    m.selecting = nil
+    return m
+  end
+
+  bucket.forgettable_hms = true
+  pushes = 0
+  local old = oldEngineMenu(press("a"))
+  MoveLearnMenu.update(old, 1/60)
+  T.eq(old.mon.moves[1].id, "FIX_EMBER",
+       "old engine + toggle ON: the HM is forgotten")
+  T.eq(pushes, 0, "old engine + toggle ON: no refusal textbox")
+
+  bucket.forgettable_hms = false
+  pushes = 0
+  old = oldEngineMenu(press("a"))
+  MoveLearnMenu.update(old, 1/60)
+  T.eq(old.mon.moves[1].id, "FLY",
+       "old engine + toggle OFF: no gate-free replacement (vanilla path)")
 end
 
 -- ------------------------------------------------ BADGELESS MOVES
@@ -911,14 +977,15 @@ T.eq(tf.x, 16, "ticker starts at the label's x")
 T.eq(tf.w, 136, "ticker clips at the inner right edge (152-16)")
 T.check(tf.overflow > 0, "overflow is the pixels past the window")
 
--- exactly one shipped toggle overflows its window: HEAL ON MAP CHANGE is
--- 18 glyphs = 144px > 136, so it ticks live; every other label fits
+-- exactly the long labels overflow their window: HEAL ON MAP CHANGE and
+-- NO ENCOUNTER DUPES are 18 glyphs = 144px > 136, so they tick live;
+-- every other label fits
 for _, row in ipairs(rows) do
-  local expected = row.id == "heal_map_change"
-  if expected then
-    T.neq(row.ticker, nil, "HEAL ON MAP CHANGE ticks (" .. row.label .. ")")
+  local ticks = row.id == "heal_map_change" or row.id == "no_enc_dupes"
+  if ticks then
+    T.neq(row.ticker, nil, "the long label ticks (" .. row.label .. ")")
     T.check(row.ticker.overflow == 8,
-            "HEAL ON MAP CHANGE overflows by 8px")
+            "it overflows by exactly 8px (" .. row.label .. ")")
   else
     T.eq(row.ticker, nil, "toggle rows fit (" .. row.label .. ")")
   end
@@ -948,7 +1015,10 @@ for _, spec in ipairs({ -- the ids are stable, from the TOGGLES list
   "badgeless_moves", "hm_item_required", "unlimited_tms",
   "forgettable_hms", "always_catch", "perfect_dvs", "exp_mult",
   "catch_exp", "instant_flee", "remember_cursor", "heal_map_change",
-  "quick_ssanne", "last_item", "free_great_ball",
+  "quick_ssanne", "last_item", "free_great_ball", "mouse_cam_lock",
+  "no_enc_dupes", "instant_fish", "heal_battle", "auto_repel",
+  "bulk_mart", "lights_on", "remember_move", "keep_money", "auto_cut",
+  "run_hold_b",
 }) do
   local help = ex.helpFor(spec)
   T.check(type(help) == "string" and #help > 0,
@@ -1054,6 +1124,285 @@ pressed.b = true
 helpMenu:update(1 / 60)
 pressed.b = nil
 T.eq(helpMenu.helpRow, nil, "popup closed again")
+
+-- ------- MOUSE CAM LOCK
+
+-- installMouseCamLock wraps a BattleCam module's mouseOrbit / mousePitch
+-- so the toggle can cut the mouse steering; a stub module drives it
+-- headless (Dramatic Shape is not loaded here, so the game.ready listener
+-- that resolves it is not exercised -- the export is the seam)
+local cam = {
+  _qolMouseCamLockInstalled = false,
+  mouseOrbit = function(dx) return "orbit " .. dx end,
+  mousePitch = function(dy) return "pitch " .. dy end,
+}
+ex.installMouseCamLock(cam)
+T.eq(cam._qolMouseCamLockInstalled, true, "install tags the module once")
+local orbitBefore = cam.mouseOrbit
+ex.installMouseCamLock(cam)
+T.eq(cam.mouseOrbit, orbitBefore, "install is idempotent")
+
+-- ships OFF: mouse steering forwards untouched
+bucket.mouse_cam_lock = false
+T.eq(cam.mouseOrbit(3), "orbit 3", "unlocked: orbit forwards")
+T.eq(cam.mousePitch(4), "pitch 4", "unlocked: pitch forwards")
+
+-- ON: the mouse no longer moves the camera, and nothing reaches the vanilla
+bucket.mouse_cam_lock = true
+T.eq(cam.mouseOrbit(3), false, "locked: orbit is a no-op")
+T.eq(cam.mousePitch(4), false, "locked: pitch is a no-op")
+
+-- the gate is read live: flipping back restores steering with no reinstall
+bucket.mouse_cam_lock = false
+T.eq(cam.mouseOrbit(5), "orbit 5", "unlock after lock: orbit works again")
+T.eq(cam.mousePitch(6), "pitch 6", "unlock after lock: pitch works again")
+bucket.mouse_cam_lock = nil
+
+-- ------- NO ENCOUNTER DUPES (avoidDupe: the encounter.roll re-roll loop)
+
+do
+  local calls = 0
+  local enc = ex.avoidDupe(function()
+    calls = calls + 1
+    return { species = "PIDGEY", level = 3 }
+  end, nil, 8)
+  T.eq(enc.species, "PIDGEY", "the first encounter is never a dupe")
+  T.eq(calls, 1, "no re-roll when there is nothing to avoid")
+end
+
+do
+  local seq = { "PIDGEY", "RATTATA" }
+  local i = 0
+  local enc = ex.avoidDupe(function()
+    i = i + 1
+    return { species = seq[i], level = 3 }
+  end, "PIDGEY", 8)
+  T.eq(enc.species, "RATTATA", "a different species is accepted")
+  T.eq(i, 2, "exactly one re-roll past the dupe")
+end
+
+do
+  local i = 0
+  local enc = ex.avoidDupe(function()
+    i = i + 1
+    return { species = "PIDGEY", level = 3 }
+  end, "PIDGEY", 4)
+  T.eq(enc.species, "PIDGEY", "a one-species pool gives up after the attempts")
+  T.eq(i, 4, "best effort: exactly max attempts")
+end
+
+T.eq(ex.avoidDupe(function() return nil end, "PIDGEY", 3), nil,
+     "a nil roll stays nil")
+
+-- ------- INSTANT FISH (fishBite: uniform pick from the rod's group)
+
+for i = 1, 20 do
+  local bite = ex.fishBite({ { species = "GOLDEEN", level = 10 },
+                             { species = "POLIWAG", level = 10 } })
+  T.check(bite.species == "GOLDEEN" or bite.species == "POLIWAG",
+          "a bite is always a member of the pool")
+  T.eq(bite.level, 10, "the pool's level is kept")
+end
+T.eq(ex.fishBite({}), nil, "an empty pool has nothing to conjure")
+T.eq(ex.fishBite(nil), nil, "a nil pool has nothing to conjure")
+
+-- ------- AUTO-REPEL (strongest repel in the bag, re-armed steps)
+
+do
+  local save = { inventory = { MAX_REPEL = 1, SUPER_REPEL = 2, REPEL = 1 } }
+  T.eq(ex.autoRepel(save), "MAX_REPEL", "the strongest repel wins")
+  local used = ex.applyAutoRepel(save)
+  T.eq(used, "MAX_REPEL", "applyAutoRepel uses the strongest")
+  T.eq(save.inventory.MAX_REPEL, nil, "the repel is consumed")
+  T.eq(save.repelSteps, 250, "MAX_REPEL re-arms 250 steps")
+end
+
+do
+  local save = { inventory = { REPEL = 3 } }
+  T.eq(ex.applyAutoRepel(save), "REPEL", "plain REPEL when it is all there is")
+  T.eq(save.repelSteps, 100, "REPEL re-arms 100 steps")
+end
+
+do
+  local save = { inventory = {} }
+  T.eq(ex.applyAutoRepel(save), nil, "no repel in the bag: nothing happens")
+  T.eq(save.repelSteps, nil, "steps are untouched")
+end
+
+-- ------- AUTO-REPEL toast (the on-screen banner announcing the refill)
+
+T.eq(ex.autoRepelToastText(100), nil, "no toast by default")
+ex.setAutoRepelToast("USED MAX REPEL!", 100)
+T.eq(ex.autoRepelToastText(100), "USED MAX REPEL!",
+     "the toast shows while active")
+T.eq(ex.autoRepelToastText(102.4), "USED MAX REPEL!",
+     "still up inside the 2.5s window")
+T.eq(ex.autoRepelToastText(102.5), nil, "expired toast clears")
+
+-- the refill arms the toast with the item's display name
+do
+  local save = { inventory = { SUPER_REPEL = 1 } }
+  local data = { items = { SUPER_REPEL = { name = "SUPER REPEL" } } }
+  local used = ex.autoRepelToastFor(save, data, 200)
+  T.eq(used, "SUPER_REPEL", "autoRepelToastFor consumes the refill")
+  T.eq(save.repelSteps, 200, "and re-arms the steps")
+  T.eq(ex.autoRepelToastText(200), "USED SUPER REPEL!",
+       "the toast names the item")
+  T.eq(ex.autoRepelToastText(203), nil, "and expires on its own")
+end
+
+do
+  local save = { inventory = {} }
+  T.eq(ex.autoRepelToastFor(save, nil, 300), nil,
+       "no repel in the bag: no toast, nothing consumed")
+  T.eq(ex.autoRepelToastText(300), nil, "and no toast is armed")
+end
+
+-- the pre-refill arms one extra step so vanilla's own decrement lands on
+-- the item's exact count (and the wear-off box never fires)
+do
+  local save = { inventory = { REPEL = 1 } }
+  local data = { items = { REPEL = { name = "REPEL" } } }
+  local used = ex.refillForStep(save, data, 400)
+  T.eq(used, "REPEL", "refillForStep consumes the repel")
+  T.eq(save.repelSteps, 101, "one step is added for vanilla's decrement")
+  save.repelSteps = save.repelSteps - 1 -- the vanilla onStepComplete decrement
+  T.eq(save.repelSteps, 100, "vanilla's decrement lands on REPEL's 100")
+  T.eq(ex.autoRepelToastText(400), "USED REPEL!", "the toast is armed")
+end
+
+do
+  local save = { inventory = {} }
+  T.eq(ex.refillForStep(save, nil, 500), nil, "no repel: refillForStep no-ops")
+  T.eq(save.repelSteps, nil, "and steps are untouched")
+end
+
+-- ------- RUN (HOLD B) (runFrames halves the per-step frame count)
+
+bucket.run_hold_b = true
+T.eq(ex.runFrames(16, { input = { isDown = function() return true end } }),
+     8, "B held halves the step frames")
+T.eq(ex.runFrames(16, { input = { isDown = function() return false end } }),
+     16, "B released keeps walking speed")
+T.eq(ex.runFrames(16, { onBike = true,
+                        input = { isDown = function() return true end } }),
+     16, "the bike keeps its own speed")
+T.eq(ex.runFrames(16, { surfing = true,
+                        input = { isDown = function() return true end } }),
+     16, "surfing keeps its own speed")
+T.eq(ex.runFrames(16, nil), 16, "a nil ctx never runs")
+bucket.run_hold_b = nil
+T.eq(ex.runFrames(16, { input = { isDown = function() return true end } }),
+     16, "toggle OFF keeps walking speed")
+
+-- ------- REMEMBER MOVE (applyMoveRemember parks moveIndex when OFF)
+
+local mvBattle = { moveIndex = 3 }
+T.eq(ex.applyMoveRemember(mvBattle, false), 1, "OFF parks the move cursor")
+mvBattle.moveIndex = 3
+T.eq(ex.applyMoveRemember(mvBattle, true), 3, "ON leaves the move cursor")
+T.eq(ex.applyMoveRemember(nil, false), nil, "nil battle is safe")
+
+-- ------- KEEP MONEY (snapshot before the halving, restore on blackout)
+
+do
+  local save = { money = 500 }
+  ex.snapshotMoney(save)
+  save.money = 250 -- the blackout halving already ran
+  ex.keepMoneyRestore(save)
+  T.eq(save.money, 500, "the pre-blackout money is restored")
+  ex.keepMoneyRestore(save)
+  T.eq(save.money, 500, "the snapshot is consumed, no double restore")
+end
+
+-- the world.blacked_out event wires the restore (the mod's own listener)
+do
+  local save = { money = 880 }
+  ex.snapshotMoney(save)
+  save.money = 440
+  Runtime.emit("world.blacked_out", { save = save })
+  T.eq(save.money, 880, "world.blacked_out restores the snapshot")
+end
+
+-- ------- HEAL AFTER BATTLE (battle.ended heals the battle's party)
+
+do
+  local Pokemon = require("src.pokemon.Pokemon")
+  local mon = Pokemon.new(Data, "FIXMON_A", 10)
+  mon.hp = 1
+  mon.status = "PSN"
+  bucket.heal_battle = true
+  Runtime.emit("battle.ended",
+               { battle = { game = { save = { party = { mon } } } } })
+  bucket.heal_battle = nil
+  T.eq(mon.hp, mon.stats.hp, "battle.ended heals the party's HP")
+  T.eq(mon.status, nil, "status cleared too")
+end
+
+-- ------- BULK MART (the mart quantity box opens at 10)
+
+do
+  local QuantityBox = require("src.ui.QuantityBox")
+  ex.setMartBuyOpen(true)
+  bucket.bulk_mart = true
+  local box = QuantityBox.new({}, { max = 99 })
+  T.eq(box.qty, 10, "a mart BUY box opens at 10")
+  local poor = QuantityBox.new({}, { max = 5 })
+  T.eq(poor.qty, 5, "clamped by what the player can afford")
+  ex.setMartBuyOpen(false)
+  ex.setMartSellOpen(true)
+  local sell = QuantityBox.new({}, { max = 99 })
+  T.eq(sell.qty, 10, "a mart SELL box opens at 10 too")
+  ex.setMartSellOpen(false)
+  bucket.bulk_mart = nil
+  local plain = QuantityBox.new({}, { max = 99 })
+  T.eq(plain.qty, 1, "toggle OFF (or outside a mart) starts at 1")
+end
+
+-- ------- AUTO CUT (the tryMove wrap: a blocked step into a tree cuts it)
+
+do
+  Runtime.emit("game.ready", {})
+  local Player = require("src.world.Player")
+  local map = {
+    id = "FIX_ROUTE",
+    def = { tileset = "OVERWORLD" },
+    inBounds = function() return true end,
+    isWalkableCell = function() return false end,
+    isWaterCell = function() return false end,
+    cellTile = function() return 0x3d end,
+    blockAt = function() return 0x10 end,
+    setBlock = function() end,
+    renderer = { rebuild = function() end },
+  }
+  local cutCalls = 0
+  local ow = { map = map,
+               tryCut = function(_, fx, fy)
+                 cutCalls = cutCalls + 1
+                 return true
+               end }
+  local savedStack = Game.stack
+  Game.stack = { states = { ow }, push = function() end, pop = function() end }
+  local player = {
+    cellX = 2, cellY = 2, facing = "right", moving = false,
+    inputLocked = false, turnArmed = false, turnTimer = 0,
+    stepFrames = 16, bumpFrames = nil,
+  }
+  bucket.auto_cut = true
+  local result = Player.tryMove(player, "right", map, {})
+  T.eq(cutCalls, 1, "a blocked step into a tree calls tryCut")
+  T.eq(result, nil, "the cut consumes the step")
+  local wall = { map = map, tryCut = function() return false end }
+  Game.stack = { states = { wall }, push = function() end, pop = function() end }
+  result = Player.tryMove(player, "right", map, {})
+  T.eq(result, "blocked", "a non-cuttable block stays blocked")
+  bucket.auto_cut = nil
+  cutCalls = 0
+  result = Player.tryMove(player, "right", map, {})
+  T.eq(cutCalls, 0, "toggle OFF never calls tryCut")
+  T.eq(result, "blocked", "and the step stays blocked")
+  Game.stack = savedStack
+end
 
 run.release()
 T.finish("qol_toggles")

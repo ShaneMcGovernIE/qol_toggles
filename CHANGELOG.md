@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.15.0] - 2026-08-07
+
+### Added
+
+- NO ENCOUNTER DUPES: a wild roll never gives the same species twice in
+  a row (re-rolled until it differs, best effort on single-species
+  areas).  Ships OFF.
+- INSTANT FISH: the rod always bites on the first try — the candidate
+  group is uniform-picked instead of run through the rejection loop.
+  Maps with no fishing group still have nothing to catch; the Old
+  Rod's always-catch is unchanged.  Ships OFF.
+- HEAL AFTER BATTLE: every battle that ends (win, run, catch, loss)
+  fully heals the party — HP, status, all PP.  Ships OFF.
+- AUTO-REPEL: a worn-off repel is replaced from the bag automatically,
+  strongest first (MAX > SUPER > plain), announced by an on-screen
+  toast — the usual "effect wore off" text is skipped when a refill
+  happens, and with nothing left it just wears off.  Ships ON.
+- BULK MART: mart quantity prompts (BUY and SELL) open at 10 instead
+  of 1, still capped by money and bag space; the mod manager's numeric
+  option boxes are untouched.  Ships OFF.
+- LIGHTS ON: dark caves and tunnels render fully lit, no FLASH needed
+  (FLASH itself still works and is harmless).  Ships OFF.
+- REMEMBER MOVE: the FIGHT move cursor stays on the last move used
+  across turns, the sibling of REMEMBER CURSOR; OFF restores the
+  vanilla first-move default.  Ships ON.
+- KEEP MONEY: blacking out no longer costs half your money, from
+  poison steps or a battle loss.  Ships OFF.
+- AUTO CUT: walking into a cut tree cuts it when a party mon knows
+  CUT, with exactly the vanilla tileset/block/CUT gates; the player
+  stays put while the text and animation play.  FIELD MOVES ALL does
+  not extend to auto-cut.  Ships OFF.
+- RUN (HOLD B): hold B to move twice as fast on foot; the bike and
+  surfing keep their own speeds.  Ships OFF.
+
+## [1.14.0] - 2026-08-06
+
+### Added
+
+- MOUSE CAM LOCK: with Dramatic Shape Voxel Mod installed, the battle
+  camera no longer follows the mouse.  Only the mouse steering is cut --
+  the right stick, a touch drag and the zoom still work.  The toggle is
+  inert (nothing to gate) when Dramatic Shape is absent.
+
+## [1.13.0] - 2026-08-05
+
+### Fixed
+
+- FORGETTABLE HMs did nothing on engine builds v0.1.59..v0.1.63: those
+  builds ran the old ChoiceBox forget flow, where MoveLearnMenu never
+  sets the `selecting` field the toggle gated on, so the gate-free
+  update never engaged and the vanilla "HM techniques can't be
+  deleted!" message appeared even with the toggle ON.  The toggle now
+  treats a missing `selecting` (old flow) as "forget list live", so
+  teaching any move over an HM works on every engine build.
+
 ## [1.12.0] - 2026-08-04
 
 ### Changed

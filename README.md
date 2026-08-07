@@ -76,13 +76,51 @@ love .
   Ball."*  Only balls actually bought count — the five from Professor
   Oak and any found on the ground never do.  The counter carries across
   shops and save sessions; the toggle ships OFF.
+- **NO ENCOUNTER DUPES** — a wild roll never gives the same species
+  twice in a row: the roll is re-rolled until it differs (best effort —
+  an area with a single species still yields it).  Session-scoped.
+- **INSTANT FISH** — the rod always bites on the first try: the
+  candidate group is picked uniformly instead of running the engine's
+  rejection loop (bite odds size/(size+4)).  A map with no fishing
+  group at all still says "Not even a nibble!" — there is nothing to
+  conjure — and the Old Rod's always-catch is unchanged.
+- **HEAL AFTER BATTLE** — every battle that ends (win, run, catch,
+  loss) fully heals the party: HP, status, and all PP.
+- **AUTO-REPEL** — when a repel wears off, the strongest repel in the
+  bag (MAX > SUPER > plain) is used automatically and announced by an
+  on-screen toast — the usual "effect wore off" text is skipped when a
+  refill happens, and with nothing left to use it just wears off.  The
+  toast never blocks — you keep walking while it fades out on its own.
+- **BULK MART** — mart quantity prompts (BUY and SELL) open at 10
+  instead of 1, still capped by money and bag space.  The mod
+  manager's own numeric option boxes are never touched.
+- **LIGHTS ON** — dark caves and tunnels render fully lit with no FLASH
+  needed; FLASH itself still works and is then harmless.
+- **REMEMBER MOVE** — the battle FIGHT move cursor stays where you left
+  it across turns (the sibling of REMEMBER CURSOR).  OFF restores the
+  vanilla first-move default every turn.
+- **KEEP MONEY** — blacking out no longer costs half your money,
+  whether the party fell to poison steps or a battle.
+- **AUTO CUT** — walk into a cut tree and a party mon that knows CUT
+  cuts it for you (the tileset, block-swap and CUT gates are exactly
+  the vanilla party-menu ones).  The player stays put while the text
+  and animation play.  FIELD MOVES ALL does not extend to auto-cut —
+  a mon that merely can learn CUT must still use the party menu.
+- **RUN (HOLD B)** — hold B to move twice as fast on foot (bike speed
+  without the bike); the bike and surfing keep their own speeds, and
+  B does nothing it did not already do in the overworld.
+- **MOUSE CAM LOCK** — with the Dramatic Shape Voxel Mod installed, the
+  battle camera no longer follows the mouse.  Only the mouse steering
+  is cut — the right stick, a touch drag and the zoom still work.  The
+  toggle is inert (nothing to gate) when Dramatic Shape is absent.
 
 ## Notes
 
 - Each switch is independent and stored with your preferences (options.lua),
   so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
   CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE
-  HMs and REMEMBER CURSOR ship ON; the rest ship OFF.
+  HMs, REMEMBER CURSOR, AUTO-REPEL and REMEMBER MOVE ship ON; the rest
+  ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.
 - Toggle labels longer than the row's label window scroll as a ticker

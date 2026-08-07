@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, instant flee and a battle cursor that remembers where it was.",
+  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, and hold-B running.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -23,13 +23,27 @@ return {
       "a QUICK S.S. ANNE switch prompts the Vermilion dock sailor for the ticket once, then lets the player pass without dialogue",
       "a LAST ITEM (M) switch makes M in battle use the last item used from the bag",
       "a POKEBALL BONUS switch grants a free GREAT BALL for every ten POKé BALLS bought at any mart, announced by the clerk",
+      "a NO ENCOUNTER DUPES switch re-rolls a wild encounter that repeats the last species (session-scoped, best effort)",
+      "an INSTANT FISH switch makes the rod always bite on the first try, uniform-picking the map's fishing group",
+      "a HEAL AFTER BATTLE switch fully heals the party (HP, status, PP) whenever a battle ends",
+      "an AUTO-REPEL switch replaces a worn-off repel from the bag automatically, strongest first, announced by an on-screen toast",
+      "a BULK MART switch opens mart quantity prompts at 10 for BUY and SELL",
+      "a LIGHTS ON switch renders dark caves and tunnels fully lit without FLASH",
+      "a REMEMBER MOVE switch keeps the FIGHT move cursor on the last move used across turns",
+      "a KEEP MONEY switch stops blackouts from halving the player's money",
+      "an AUTO CUT switch cuts trees the player walks into when a party mon knows CUT",
+      "a RUN (HOLD B) switch doubles foot speed while B is held, off the bike and off the surfboard",
+      "a MOUSE CAM LOCK switch stops Dramatic Shape's battle camera following the mouse (stick, drag and zoom still work)",
     },
     added = {
       "a QOL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
     },
     known = {
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs and REMEMBER CURSOR ship ON; the other eleven ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL and REMEMBER MOVE ship ON; the other twenty ship OFF.  Toggles persist in options.lua, independent of save files",
+      "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",
+      "AUTO CUT only fires when a party mon knows CUT (FIELD MOVES ALL does not extend to it), and the step is consumed by the cut text + animation",
+      "NO ENCOUNTER DUPES is session-scoped, so a restart forgets the last species",
     },
   },
   credits = {},

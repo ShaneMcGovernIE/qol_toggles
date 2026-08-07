@@ -30,6 +30,21 @@
 --                    balls throw at the foe, healing asks which mon
 --   POKEBALL BONUS   buying 10 POKé BALLS at any mart gets you a free
 --                    GREAT BALL
+--   NO ENCOUNTER DUPES  a wild roll never gives the same species twice
+--                       in a row (rerolls until it differs)
+--   INSTANT FISH        the rod always bites on the first try
+--   HEAL AFTER BATTLE   every battle ends with the party fully healed
+--   AUTO-REPEL          a worn-off repel is replaced from the bag (best
+--                       one first)
+--   BULK MART           mart quantity prompts open at 10 instead of 1
+--   LIGHTS ON           dark caves render fully lit, no FLASH needed
+--   REMEMBER MOVE       the FIGHT move cursor stays on the last move
+--   KEEP MONEY          blacking out no longer costs half your money
+--   AUTO CUT            walking into a cut tree cuts it when a mon knows
+--                       CUT
+--   RUN (HOLD B)        hold B to move twice as fast on foot
+--   MOUSE CAM LOCK   Dramatic Shape's battle camera no longer follows the
+--                    mouse (the right stick, a drag and the zoom still work)
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -142,6 +157,26 @@ local function battleTop()
   return nil
 end
 
+-- NO ENCOUNTER DUPES: the species of the last wild roll, nil until the
+-- first encounter; a roll that repeats it is re-rolled (session-scoped,
+-- like lastItemId -- hot reload resets it, which is fine).
+local lastEncounterSpecies = nil
+
+-- KEEP MONEY: the pre-blackout money, snapshotted by the wraps right
+-- before the two halving sites (afterBattle and the poison-tick
+-- blackout) and restored by the world.blacked_out handler.
+local blackoutKeepMoney = nil
+
+-- BULK MART: true while a mart's SELL list is open (the mirror of
+-- martBuyOpen; the ListMenu wrap sets and clears it).
+local martSellOpen = false
+
+-- AUTO-REPEL toast: a transient on-screen banner (drawn by the overworld
+-- draw wrap) announcing the repel that was just auto-used.  Non-modal --
+-- the player keeps walking while it fades out on its own.
+local autoRepelToast = nil
+local TOAST_SECONDS = 2.5
+
 local TOGGLES = {
   { key = "poison_save", label = "POISON SAVE", default = true,
     help = "A poisoned mon\nfated to faint\nfrom the step\nkeeps 1 HP and\nthe poison\nsubsides." },
@@ -179,6 +214,28 @@ local TOGGLES = {
     help = "Press M in battle\nto use the last\nitem you used.\vBalls throw at\nthe foe; healing\nasks which\nPOKéMON." },
   { key = "free_great_ball", label = "POKEBALL BONUS", default = false,
     help = "Buy 10 POKé\nBALLS at any\nmart and get a\nfree GREAT\nBALL.\vThe count\ncarries over." },
+  { key = "mouse_cam_lock", label = "MOUSE CAM LOCK", default = false,
+    help = "Dramatic Shape's\nbattle camera\nstops following\nthe mouse.\vThe stick,\na drag and the\nzoom still work." },
+  { key = "no_enc_dupes", label = "NO ENCOUNTER DUPES", default = false,
+    help = "A wild roll never\ngives the same\nspecies twice in\na row.\vRerolls until it\ndiffers." },
+  { key = "instant_fish", label = "INSTANT FISH", default = false,
+    help = "The rod always\nbites, no more\n\"Not even a\nnibble!\" loops." },
+  { key = "heal_battle", label = "HEAL AFTER BATTLE", default = false,
+    help = "Every battle\nends with the\nparty fully\nhealed: HP,\nstatus, PP." },
+  { key = "auto_repel", label = "AUTO-REPEL", default = true,
+    help = "When a repel\nwears off, the\nstrongest one in\nthe bag is used\nfor you.\vOut of repels:\nit wears off." },
+  { key = "bulk_mart", label = "BULK MART", default = false,
+    help = "Mart quantity\nprompts start\nat 10 instead\nof 1.\vStill capped by\nyour money and\nbag space." },
+  { key = "lights_on", label = "LIGHTS ON", default = false,
+    help = "Dark caves and\ntunnels render\nfully lit.\vNo FLASH\nneeded." },
+  { key = "remember_move", label = "REMEMBER MOVE", default = true,
+    help = "The FIGHT move\ncursor stays on\nthe last move\nused.\vOFF resets to\nthe first move\neach turn." },
+  { key = "keep_money", label = "KEEP MONEY", default = false,
+    help = "Blacking out\nno longer costs\nhalf your\nmoney." },
+  { key = "auto_cut", label = "AUTO CUT", default = false,
+    help = "Walk into a cut\ntree and a mon\nthat knows CUT\ncuts it for\nyou." },
+  { key = "run_hold_b", label = "RUN (HOLD B)", default = false,
+    help = "Hold B to move\ntwice as fast\non foot.\vNo effect on\nthe bike or\nsurfing." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list)
@@ -342,6 +399,128 @@ return function(mod)
   -- wrap does, so the headless suite can drive the Bag.add bonus
   mod.exports.setMartBuyOpen = function(open)
     martBuyOpen = open
+  end
+
+  -- test seam: the SELL-list mirror of setMartBuyOpen (the ListMenu wrap
+  -- is the live writer), so the suite can drive the BULK MART qty box
+  mod.exports.setMartSellOpen = function(open)
+    martSellOpen = open
+  end
+
+  -- NO ENCOUNTER DUPES: re-roll a wild encounter until it is not the same
+  -- species as the last one (max attempts, then the last roll stands).
+  -- Pure: `roll` is any thunk returning an encounter table or nil.
+  mod.exports.avoidDupe = function(roll, last, max)
+    local lastRoll
+    for _ = 1, (max or 8) do
+      local enc = roll()
+      if not enc then return nil end
+      lastRoll = enc
+      if enc.species ~= last then return enc end
+    end
+    return lastRoll
+  end
+
+  -- INSTANT FISH: a uniform pick from the rod's candidate group, skipping
+  -- the engine's rejection loop (bite odds size/(size+4)); nil when the
+  -- map has no fishing group at all (nothing to conjure).
+  mod.exports.fishBite = function(candidates)
+    if candidates and #candidates > 0 then
+      local pick = candidates[math.random(#candidates)]
+      return { species = pick.species, level = pick.level }
+    end
+    return nil
+  end
+
+  -- AUTO-REPEL: the strongest repel in the bag (MAX > SUPER > plain), or
+  -- nil when there is nothing to use
+  mod.exports.autoRepel = function(save)
+    local inv = save and save.inventory
+    if not inv then return nil end
+    for _, id in ipairs({ "MAX_REPEL", "SUPER_REPEL", "REPEL" }) do
+      if inv[id] and inv[id] > 0 then return id end
+    end
+    return nil
+  end
+
+  -- consume the auto-repel and re-arm save.repelSteps; returns the item
+  -- used, or nil when the bag has none
+  mod.exports.applyAutoRepel = function(save)
+    local id = mod.exports.autoRepel(save)
+    if not id then return nil end
+    require("src.inventory.Bag").remove(save, id, 1)
+    save.repelSteps = id == "REPEL" and 100
+                      or id == "SUPER_REPEL" and 200 or 250
+    return id
+  end
+
+  -- AUTO-REPEL toast: consume the refill and arm the on-screen banner
+  -- that announces it; returns the item used, or nil when the bag has
+  -- none.  `now` is the toast clock (love.timer.getTime in game; the
+  -- headless suite passes its own so expiry is deterministic).
+  mod.exports.setAutoRepelToast = function(text, now)
+    autoRepelToast = { text = text,
+                       expire = (now or 0) + TOAST_SECONDS }
+  end
+
+  mod.exports.autoRepelToastText = function(now)
+    if autoRepelToast and autoRepelToast.expire > (now or 0) then
+      return autoRepelToast.text
+    end
+    autoRepelToast = nil
+    return nil
+  end
+
+  mod.exports.autoRepelToastFor = function(save, data, now)
+    local id = mod.exports.applyAutoRepel(save)
+    if id then
+      local def = data and data.items and data.items[id]
+      local name = def and def.name or id
+      mod.exports.setAutoRepelToast(Strings("USED %s!", name), now)
+      return id
+    end
+    return nil
+  end
+
+  -- the onStepComplete pre-refill: autoRepelToastFor plus one extra step
+  -- so vanilla's own decrement (repelSteps = repelSteps - 1) lands on the
+  -- item's exact count; returns the item used, or nil when there was
+  -- nothing to refill with
+  mod.exports.refillForStep = function(save, data, now)
+    local id = mod.exports.autoRepelToastFor(save, data, now)
+    if id and save then save.repelSteps = save.repelSteps + 1 end
+    return id
+  end
+
+  -- RUN (HOLD B): halve the per-step frame count (double foot speed)
+  -- while B is held, off the bike and off the surfboard
+  mod.exports.runFrames = function(frames, ctx)
+    if get("run_hold_b") and not (ctx and (ctx.onBike or ctx.surfing))
+       and ctx and ctx.input and ctx.input:isDown("b") then
+      return frames / 2
+    end
+    return frames
+  end
+
+  -- REMEMBER MOVE: the battle object already keeps moveIndex across
+  -- turns; with the toggle OFF the end of every turn parks it back on
+  -- the first move, the vanilla default
+  mod.exports.applyMoveRemember = function(battle, remember)
+    if battle and not remember then battle.moveIndex = 1 end
+    return battle and battle.moveIndex or nil
+  end
+
+  -- KEEP MONEY: snapshot before the halving sites run, restore on the
+  -- blackout event (the halving has already happened by then)
+  mod.exports.snapshotMoney = function(save)
+    if save then blackoutKeepMoney = save.money end
+  end
+
+  mod.exports.keepMoneyRestore = function(save)
+    if save and blackoutKeepMoney ~= nil then
+      save.money = blackoutKeepMoney
+      blackoutKeepMoney = nil
+    end
   end
 
   -- LAST ITEM (M) in battle: spend the turn using the last item the bag
@@ -633,9 +812,14 @@ return function(mod)
   -- module-local HM_MOVES table, so while the toggle is on the wrap below
   -- swaps in this gate-free copy of the same update (the vanilla body
   -- minus the HMCantDeleteText check -- keep it in lockstep with
-  -- src/ui/MoveLearnMenu.lua)
+  -- src/ui/MoveLearnMenu.lua).  The selecting guard is "== false" (not
+  -- "not selecting"): engine builds v0.1.59..v0.1.63 ran the old
+  -- ChoiceBox flow and never set selecting at all (nil), with the forget
+  -- list live whenever the menu is top -- treating nil as "not yet
+  -- choosing" would disable the toggle on those builds and the vanilla
+  -- HM gate would fire even with FORGETTABLE HMs on.
   mod.exports.forgetUpdate = function(self, dt)
-    if not self.selecting then return end
+    if self.selecting == false then return end
     local input = self.game.input
     local n = #self.mon.moves + 1 -- moves + CANCEL
     if input:wasPressed("up") then
@@ -939,6 +1123,9 @@ return function(mod)
     local TextBox = require("src.render.TextBox")
     local vanillaPoison = OverworldState.applyFieldPoison
     OverworldState.applyFieldPoison = function(self)
+      -- KEEP MONEY: the poison-tick blackout halves money inside the
+      -- text-box callback (async), so snapshot before vanilla runs
+      if get("keep_money") then mod.exports.snapshotMoney(Game.save) end
       if not get("poison_save") then return vanillaPoison(self) end
       local save = Game.save
       local interval = FieldDefaults.world(Game.data, "poisonStepInterval") or 4
@@ -982,6 +1169,150 @@ return function(mod)
     end
   end)
 
+  -- MOUSE CAM LOCK: Dramatic Shape's staged-battle camera is steered by
+  -- the mouse through BattleCam.mouseOrbit / BattleCam.mousePitch --
+  -- CamControl wraps love.mousemoved and calls those per event while a
+  -- battle is live.  Replacing the two functions with toggle-gated ones
+  -- cuts the mouse steering and nothing else: the right stick, a touch
+  -- drag and the wheel still reach the camera, because CamControl routes
+  -- those through different functions (stickOrbit / dragOrbit / stepZoom).
+  -- Exported so the headless suite can drive it on a stub BattleCam;
+  -- installed for real by the game.ready listener below, which resolves
+  -- the DRAMATIC_SHAPE mod handle.  Without Dramatic Shape the toggle is
+  -- inert (nothing to gate), and a session with it absent never wraps.
+  mod.exports.installMouseCamLock = function(BattleCam)
+    if not BattleCam or BattleCam._qolMouseCamLockInstalled then return end
+    BattleCam._qolMouseCamLockInstalled = true
+    local vanillaOrbit = BattleCam.mouseOrbit
+    BattleCam.mouseOrbit = function(dx)
+      if get("mouse_cam_lock") then return false end
+      return vanillaOrbit(dx)
+    end
+    local vanillaPitch = BattleCam.mousePitch
+    BattleCam.mousePitch = function(dy)
+      if get("mouse_cam_lock") then return false end
+      return vanillaPitch(dy)
+    end
+  end
+
+  -- MOUSE CAM LOCK install: game.ready is where another mod's handle is
+  -- resolvable.  Dramatic Shape exposes its lib namespace as
+  -- exports.lib (its own V), and BattleCam is one of its lib/ modules.
+  -- Guarded so a session without Dramatic Shape never wraps anything; the
+  -- toggle stays in the submenu either way, it just has nothing to gate.
+  mod.events:on("game.ready", function()
+    local ds = mod:find("DRAMATIC_SHAPE")
+    if not ds then return end
+    local lib = ds.exports and ds.exports.lib
+    if not (lib and lib.require) then return end
+    local ok, BattleCam = pcall(function() return lib.require("BattleCam") end)
+    if ok and BattleCam then mod.exports.installMouseCamLock(BattleCam) end
+  end)
+
+  -- LIGHTS ON / AUTO-REPEL / KEEP MONEY / AUTO CUT: overworld seams,
+  -- one wrap per session (hot reload re-runs entry chunks)
+  mod.events:on("game.ready", function()
+    local OverworldState = require("src.world.OverworldController")
+    -- LIGHTS ON: dark maps (Rock Tunnel ...) ask for darkness through
+    -- setDark; forcing the flag off renders them lit.  FLASH still sets
+    -- save.flashLit, which is then harmless.
+    if not OverworldState._qolTogglesLightsInstalled then
+      OverworldState._qolTogglesLightsInstalled = true
+      local vanillaSetDark = OverworldState.setDark
+      OverworldState.setDark = function(self, on)
+        if get("lights_on") then on = false end
+        return vanillaSetDark(self, on)
+      end
+    end
+
+    -- AUTO-REPEL: refill BEFORE vanilla decrements, so the wear-off box
+    -- never fires when there is a repel to take over -- the toast is the
+    -- announcement.  The step count is set one higher than the item's
+    -- value so vanilla's own decrement lands on the exact count; with
+    -- nothing in the bag the step falls through and the vanilla wore-off
+    -- box shows as usual.
+    if not OverworldState._qolTogglesAutoRepelInstalled then
+      OverworldState._qolTogglesAutoRepelInstalled = true
+      local vanillaOnStep = OverworldState.onStepComplete
+      OverworldState.onStepComplete = function(self)
+        if get("auto_repel") and Game.save and Game.save.repelSteps == 1 then
+          local now = (love and love.timer and love.timer.getTime)
+                      and love.timer.getTime() or os.clock()
+          mod.exports.refillForStep(Game.save, Game.data, now)
+        end
+        return vanillaOnStep(self)
+      end
+    end
+
+    -- AUTO-REPEL toast draw: a transient banner across the top of the
+    -- screen, drawn after the world so it shows wherever the player is
+    -- walking; it never takes input and fades out on its own.  White box
+    -- with black text -- the engine's palette path renders that idiom
+    -- (TextBox and every menu draw the same way); white-on-black does
+    -- not survive the pass.
+    if not OverworldState._qolTogglesToastInstalled then
+      OverworldState._qolTogglesToastInstalled = true
+      local vanillaDraw = OverworldState.draw
+      OverworldState.draw = function(self)
+        vanillaDraw(self)
+        local now = (love and love.timer and love.timer.getTime)
+                    and love.timer.getTime() or os.clock()
+        local text = mod.exports.autoRepelToastText(now)
+        if not text then return end
+        local Font = require("src.render.Font")
+        local g = love.graphics
+        local w = Font.width(text)
+        local bw = w + 16
+        local bx = math.floor((160 - bw) / 2)
+        -- fade out over the last half second of the window
+        local alpha = math.min(1, (autoRepelToast.expire - now) / 0.5)
+        g.setColor(1, 1, 1, alpha)
+        g.rectangle("fill", bx, 8, bw, 16)
+        g.setColor(0, 0, 0, alpha)
+        Font.draw(text, bx + 8, 12)
+        g.setColor(1, 1, 1, 1)
+      end
+    end
+
+    -- KEEP MONEY: afterBattle halves money synchronously on a loss, so
+    -- the snapshot lands right before vanilla runs; the poison-tick
+    -- blackout is snapshotted in the applyFieldPoison wrap above (the
+    -- halving there is async, inside the pushed text-box callback).
+    if not OverworldState._qolTogglesKeepMoneyInstalled then
+      OverworldState._qolTogglesKeepMoneyInstalled = true
+      local vanillaAfter = OverworldState.afterBattle
+      OverworldState.afterBattle = function(self, result, battle)
+        if get("keep_money") and result == "lose" then
+          mod.exports.snapshotMoney(Game.save)
+        end
+        return vanillaAfter(self, result, battle)
+      end
+    end
+
+    -- AUTO CUT: a step blocked by a cuttable tree cuts it instead of
+    -- bonking -- tryCut re-gates on the tileset, the block swap and a
+    -- party mon that knows CUT, so this only fires where vanilla CUT
+    -- would.  The player stays put while the text + animation play.
+    local Player = require("src.world.Player")
+    if not Player._qolTogglesAutoCutInstalled then
+      Player._qolTogglesAutoCutInstalled = true
+      local vanillaTryMove = Player.tryMove
+      Player.tryMove = function(self, dir, map, entities)
+        local result, why = vanillaTryMove(self, dir, map, entities)
+        if result == "blocked" and get("auto_cut") then
+          local stack = Game.stack
+          local top = stack and stack.states and stack.states[#stack.states]
+          if top and top.tryCut then
+            local Collision = require("src.world.Collision")
+            local tx, ty = Collision.target(self.cellX, self.cellY, dir)
+            if top:tryCut(tx, ty) then return nil end
+          end
+        end
+        return result, why
+      end
+    end
+  end)
+
   -- PERFECT DVS + FULL HEAL CATCH: storeCaughtMon places the mon (party or
   -- PC) before emitting pokemon.caught, so mutating the payload covers
   -- both.  DVs first (stats recomputed), then the heal reads the new max.
@@ -992,27 +1323,70 @@ return function(mod)
     if get("catch_heal") then mod.exports.healCaught(ev.mon) end
   end)
 
-  -- REMEMBER CURSOR: turn_ended fires when the turn's actions finish and
-  -- before the act queue hands back to afterQueue "menu", so an OFF
-  -- reset lands exactly as the next turn's menu opens
+  -- REMEMBER CURSOR / REMEMBER MOVE: turn_ended fires when the turn's
+  -- actions finish and before the act queue hands back to afterQueue
+  -- "menu", so an OFF reset lands exactly as the next turn's menu opens
   mod.events:on("battle.turn_ended", function(ev)
     if ev and ev.battle then
       mod.exports.applyCursorRemember(ev.battle, get("remember_cursor"))
+      mod.exports.applyMoveRemember(ev.battle, get("remember_move"))
     end
+  end)
+
+  -- HEAL AFTER BATTLE: every battle that ends (win, run, catch, loss)
+  -- fully heals the party -- HP, status, and all PP
+  mod.events:on("battle.ended", function(ev)
+    if ev and ev.battle and get("heal_battle") then
+      local save = (ev.battle.game and ev.battle.game.save) or Game.save
+      mod.exports.healParty(save and save.party)
+    end
+  end)
+
+  -- KEEP MONEY: the blackout halving already ran before this event fires;
+  -- restore the pre-blackout snapshot taken by the wraps below
+  mod.events:on("world.blacked_out", function(ev)
+    if ev and ev.save then mod.exports.keepMoneyRestore(ev.save) end
   end)
 
   -- INFINITE REPEL: suppress every walking wild roll (grass, surf, caves);
   -- fishing keeps its own encounter.fishing path, like the Repel item.
+  -- NO ENCOUNTER DUPES: a non-nil roll that repeats the last species is
+  -- re-rolled (best effort -- after 8 attempts the last roll stands).
   -- Defensive: a downstream roll that throws (e.g. another mod's patch
   -- left a map's water/grass def without a rate) degrades to "no
   -- encounter" instead of blue-screening the game mid-step.
   mod.hooks:wrap("encounter.roll", function(next, encDef, ctx)
     if get("repel") then return nil end
-    local ok, enc = pcall(next, encDef, ctx)
-    if ok then return enc end
-    mod.log.warn("encounter.roll failed (%s); suppressing the roll",
-                 tostring(enc))
-    return nil
+    local enc = mod.exports.avoidDupe(function()
+      local ok, rolled = pcall(next, encDef, ctx)
+      if not ok then
+        mod.log.warn("encounter.roll failed (%s); suppressing the roll",
+                     tostring(rolled))
+        return nil
+      end
+      return rolled
+    end, get("no_enc_dupes") and lastEncounterSpecies or nil, 8)
+    if enc then lastEncounterSpecies = enc.species end
+    return enc
+  end)
+
+  -- INSTANT FISH: every cast with a candidate group bites immediately --
+  -- the group is uniform-picked instead of run through the rejection
+  -- loop (bite odds size/(size+4)); a map with no group still has
+  -- nothing to catch.  The Old Rod (always-catch) is unaffected.
+  mod.hooks:wrap("encounter.fishing", function(next, rod, mapId, candidates)
+    if get("instant_fish") then
+      local enc = mod.exports.fishBite(candidates)
+      if enc then return enc end
+    end
+    return next(rod, mapId, candidates)
+  end)
+
+  -- RUN (HOLD B): double foot speed while B is held (the movement.speed
+  -- hook hands out the per-step frame count); the bike and surfing keep
+  -- their own speeds
+  mod.hooks:wrap("movement.speed", function(next, frames, ctx)
+    return mod.exports.runFrames(next(frames, ctx), ctx)
   end)
 
   -- FIELD MOVES ALL / BADGELESS MOVES at USE time: the surf mount, the cut
@@ -1094,7 +1468,12 @@ return function(mod)
     MoveLearnMenu._qolTogglesHmForgetInstalled = true
     local vanillaUpdate = MoveLearnMenu.update
     MoveLearnMenu.update = function(self, dt)
-      if get("forgettable_hms") and self.selecting then
+      -- selecting ~= false (not selecting): on engine builds v0.1.59..
+      -- v0.1.63 MoveLearnMenu never sets selecting (the old ChoiceBox
+      -- flow), so a truthy check would keep the vanilla HM gate up no
+      -- matter the toggle; nil means "forget list live", exactly the
+      -- state this gate-free update is for.
+      if get("forgettable_hms") and self.selecting ~= false then
         return mod.exports.forgetUpdate(self, dt)
       end
       return vanillaUpdate(self, dt)
@@ -1182,6 +1561,38 @@ return function(mod)
         end
       end
       return ok
+    end
+  end
+
+  -- BULK MART: the mart quantity prompt (BUY and SELL) opens at 10
+  -- instead of 1, still clamped upstream by money and bag space.  The
+  -- mod manager's own QuantityBox rows (numeric options) are never
+  -- touched: only boxes pushed while a mart list sits on the stack.
+  local QuantityBox = require("src.ui.QuantityBox")
+  if not Game._qolTogglesBulkMartInstalled then
+    Game._qolTogglesBulkMartInstalled = true
+
+    local vanillaListNew = ListMenu.new
+    ListMenu.new = function(game, title, items, opts)
+      local list = vanillaListNew(game, title, items, opts)
+      if list.dialogue and title == "SELL" then
+        local cancel = list.onCancel
+        list.onCancel = function()
+          martSellOpen = false
+          if cancel then return cancel() end
+        end
+        martSellOpen = true
+      end
+      return list
+    end
+
+    local vanillaQtyNew = QuantityBox.new
+    QuantityBox.new = function(game, opts)
+      local box = vanillaQtyNew(game, opts)
+      if (martBuyOpen or martSellOpen) and get("bulk_mart") then
+        box.qty = math.min(10, box.max)
+      end
+      return box
     end
   end
 end

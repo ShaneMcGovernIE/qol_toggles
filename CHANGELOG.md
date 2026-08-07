@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.16.4] - 2026-08-07
+
+### Fixed
+
+- Start menu compatibility with Gen1 Modern UI: the auto-repel toast wrapped
+  `OverworldState.draw`, which Gen1 Modern UI's `presentationStack` treats as
+  proof that the released overworld renderer was replaced — disabling its
+  overworld presenter, and with it every menu layered over the overworld
+  (StartMenu included). The toast now draws through the additive
+  `OverworldState.drawUI` overlay seam, which Gen1 Modern UI explicitly
+  sanctions for location banners, so the stock `draw` (and its identity)
+  survives untouched and the Start menu opens normally. No Gen1 Modern UI
+  change is required — QoL Toggles also leaves `Game:gamepadpressed`
+  dispatch untouched, so the engine opens the native Start menu on
+  controller START with Gen1 Modern UI enabled.
+
 ## [1.16.1] - 2026-08-07
 
 ### Fixed

@@ -1291,7 +1291,10 @@ return function(mod)
   -- P (keyboard) on a row shows its in-depth help, and M arms the LAST
   -- ITEM battle shortcut while a battle is top.  P and M use raw key input
   -- because they are not Game Boy buttons; START is read by the menu's
-  -- normal input edge in QolTogglesMenu:update.
+  -- normal input edge in QolTogglesMenu:update.  Do not wrap
+  -- Game:gamepadpressed here: the engine must receive controller START so
+  -- OverworldController can open the native StartMenu, including when Gen1
+  -- Modern UI replaces its presenter.
   if not Game._qolTogglesHelpKeysInstalled then
     Game._qolTogglesHelpKeysInstalled = true
     local vanillaKey = Game.keypressed
@@ -1521,9 +1524,16 @@ return function(mod)
     -- not survive the pass.
     if not OverworldState._qolTogglesToastInstalled then
       OverworldState._qolTogglesToastInstalled = true
-      local vanillaDraw = OverworldState.draw
-      OverworldState.draw = function(self)
-        vanillaDraw(self)
+      -- Wrap the overworld's screen-space overlay pass, not its world draw.
+      -- Gen1 Modern UI's presentationStack disables the overworld presenter
+      -- (and every menu layered over it, StartMenu included) when
+      -- OverworldState.draw stops being the released renderer.  drawUI is
+      -- the additive seam its own comment sanctions for location banners,
+      -- so the toast draws there and the stock draw (and its identity)
+      -- survives untouched.
+      local vanillaDrawUI = OverworldState.drawUI
+      OverworldState.drawUI = function(self)
+        vanillaDrawUI(self)
         local now = (love and love.timer and love.timer.getTime)
                     and love.timer.getTime() or os.clock()
         local text = mod.exports.autoRepelToastText(now)

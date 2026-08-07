@@ -7,17 +7,42 @@ package.path = "./?.lua;./?/init.lua;" .. package.path
 local T = require("tests.modkit")
 local Runtime = require("src.mods.Runtime")
 local Data = require("src.core.Data")
+local Game = require("src.core.Game")
+local vanillaGamepadDispatch = Game.gamepadpressed
 Data:load()
 
-local run = T.sdk.loadMod("mods/qol_toggles", { data = Data })
+local loadRoot = os.getenv("QOL_TOGGLES_ROOT")
+local run = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
+  { data = Data, root = loadRoot })
 T.eq(#run.errors, 0, "loads clean (" .. tostring(run.errors[1]) .. ")")
 local ex = run.loader.exports.qol_toggles
 T.neq(ex, nil, "exports reachable")
 
 -- the toggles read through Game.mods (the loader), which the headless
 -- harness does not wire by itself
-local Game = require("src.core.Game")
 Game.mods = run.loader
+
+-- Controller START belongs to the engine's dispatch path.  QoL's help
+-- shortcut must never replace Game:gamepadpressed, or the overworld cannot
+-- open StartMenu (notably with Gen1 Modern UI's StartMenu presenter).
+T.eq(Game.gamepadpressed, vanillaGamepadDispatch,
+  "QoL does not intercept controller dispatch")
+
+-- ------------------------------------------- the auto-repel toast seam
+
+-- Gen1 Modern UI's presentationStack disables the overworld presenter --
+-- and every menu layered over it, StartMenu included -- when
+-- OverworldState.draw stops being the released renderer.  The toast must
+-- wrap the screen-space overlay pass (drawUI) additively and leave the
+-- world draw's identity intact.
+local OverworldState = require("src.world.OverworldController")
+local vanillaDraw = OverworldState.draw
+local vanillaDrawUI = OverworldState.drawUI
+run.loader.events:emit("game.ready", { game = Game })
+T.eq(OverworldState.draw, vanillaDraw,
+  "toast leaves OverworldState.draw identity untouched (modern UI presenter)")
+T.neq(OverworldState.drawUI, vanillaDrawUI,
+  "toast wraps OverworldState.drawUI additively")
 
 -- ------------------------------------------------ the OPTIONS row
 

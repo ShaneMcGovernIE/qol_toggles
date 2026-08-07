@@ -131,7 +131,9 @@ love .
   from another category is used instead — the turn is never wasted on the
   Emerald "couldn't use its power" skip, because Gen 1's missing target
   data makes empty categories far more common than in Emerald and the skip
-  would spam that message. If the toggle is switched off, the original player
+  would spam that message. Out of PP entirely, the Pokémon Struggles like
+  vanilla Gen 1 (recoil included) instead of skipping the turn. If the
+  toggle is switched off, the original player
   action proceeds. Ships OFF. This applies to free player turns in ordinary
   wild/trainer battles; link battles remain synchronized and unchanged.
 - **MAP LOCATION** — when ON, entering a new area shows its name in the

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.2] - 2026-08-07
+
+### Changed
+
+- AUTO BATTLER: a Pokémon with no usable moves (all PP spent) now
+  Struggles like vanilla Gen 1 instead of skipping the turn with the
+  "is incapable of using its power!" message — the same action shape the
+  engine's own no-PP path and trainer AI use, recoil included.  The
+  incapability message can no longer appear in normal play.
+
 ## [1.17.1] - 2026-08-07
 
 ### Fixed

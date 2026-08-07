@@ -1719,8 +1719,10 @@ do
   T.eq(wait.id, "FIX_TACKLE",
        "the live fallback uses a move instead of wasting the turn")
   T.eq(#queued, 0, "no incapability text for the QoL fallback")
-  -- the incapability text survives for the one case it is truthful: a mon
-  -- with no usable moves at all (all PP spent / every slot disabled)
+  -- the incapability text is now unreachable from the live seam (a mon
+  -- with no usable moves gets the vanilla Struggle action instead); it
+  -- remains as the explicit-opt-in path (fallbackChance / fallbackIncapable)
+  -- that the pure suite pins
   local emptyMon = {
     mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
             statExp = {}, hp = 100, stats = { hp = 100 } },
@@ -1735,8 +1737,15 @@ do
   }
   local none = ex.autoBattleAction(emptyBattle,
                                    { id = "FIX_SCRATCH", pp = 10 })
-  T.eq(none, nil, "a mon with no usable moves has no action")
-  T.eq(#queued, 1, "and the incapability text announces the skipped turn")
+  T.eq(none.id, "STRUGGLE", "a mon with no usable moves gets Struggle")
+  T.eq(none.struggle, true, "the Struggle action carries the engine's flag")
+  T.eq(#queued, 0, "no incapability text on the Struggle path")
+  -- the pure chooser hands back the same action shape
+  local pure = ex.palaceChooseMove(emptyBattle, emptyMon, nil,
+                                   { nature = "LONELY", categoryRoll = 99,
+                                     randomWithinCategory = true,
+                                     unlimited = false })
+  T.eq(pure.id, "STRUGGLE", "palaceChooseMove returns the Struggle action")
   bucket.auto_battler = false
   T.eq(ex.autoBattleAction(liveFallback, { id = "FIX_SCRATCH", pp = 10 }).id,
        "FIX_SCRATCH", "turning AUTO BATTLER off preserves the action")

@@ -843,7 +843,14 @@ return function(mod)
         grouped[group][#grouped[group] + 1] = copy
       end
     end
-    if #moves == 0 then return nil end
+    if #moves == 0 then
+      -- No usable moves (all PP spent / every slot disabled): vanilla Gen 1
+      -- engages Struggle -- BattleState's own no-PP path and the trainer AI
+      -- both hand resolveTurn this exact action shape, recoil included.  The
+      -- mon acts instead of skipping the turn with the Palace incapability
+      -- message.
+      return { id = "STRUGGLE", pp = 1, struggle = true }
+    end
     local rng = opts.rng or (battle and battle.rng) or math.random
     local roll = opts.categoryRoll
     if roll == nil then roll = rng(0, 99) end

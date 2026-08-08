@@ -40,7 +40,45 @@ T.eq(Game.gamepadpressed, vanillaGamepadDispatch,
 local OverworldState = require("src.world.OverworldController")
 local vanillaDraw = OverworldState.draw
 local vanillaDrawUI = OverworldState.drawUI
+
+-- LIGHTS ON must use setMap's normal FLASH-lit path.  A setDark wrapper
+-- reloads baked maps in RED++, so this stub makes that recursion observable
+-- without constructing the full overworld renderer.
+local vanillaSetMap = OverworldState.setMap
+local mapEntries = 0
+local flashLitDuringEntry
+OverworldState.setMap = function(self, mapId)
+  mapEntries = mapEntries + 1
+  flashLitDuringEntry = Game.save.flashLit
+  self.map = { id = mapId }
+  self:setDark(not Game.save.flashLit)
+end
+local saveBeforeLightsTest = Game.save
+local dataBeforeLightsTest = Game.data
+Game.data = Data
+local darkMapsBeforeLightsTest = Game.data.field.darkMaps
+Game.save = { flashLit = nil }
+-- The fixture data intentionally omits the production dark-map definition;
+-- seed only this test map so the LIGHTS ON wrapper's dark-map branch runs.
+Game.data.field.darkMaps = { maps = { "ROCK_TUNNEL_1F" } }
+run.loader.modOptions = run.loader.modOptions or {}
+run.loader.modOptions.qol_toggles = run.loader.modOptions.qol_toggles or {}
+run.loader.modOptions.qol_toggles.lights_on = true
 run.loader.events:emit("game.ready", { game = Game })
+local overworldStub = {
+  setDark = function(self, on) self.dark = on end,
+}
+OverworldState.setMap(overworldStub, "ROCK_TUNNEL_1F")
+T.eq(mapEntries, 1, "LIGHTS ON enters a dark map without recursive setMap")
+T.eq(flashLitDuringEntry, true,
+  "LIGHTS ON borrows FLASH-lit state during dark map entry")
+T.eq(overworldStub.dark, false, "LIGHTS ON leaves a dark map lit")
+T.eq(Game.save.flashLit, nil, "LIGHTS ON restores the borrowed FLASH flag")
+Game.save = saveBeforeLightsTest
+Game.data.field.darkMaps = darkMapsBeforeLightsTest
+Game.data = dataBeforeLightsTest
+OverworldState.setMap = vanillaSetMap
+
 T.eq(OverworldState.draw, vanillaDraw,
   "toast leaves OverworldState.draw identity untouched (modern UI presenter)")
 T.neq(OverworldState.drawUI, vanillaDrawUI,

@@ -1867,15 +1867,33 @@ return function(mod)
   -- one wrap per session (hot reload re-runs entry chunks)
   mod.events:on("game.ready", function()
     local OverworldState = require("src.world.OverworldController")
-    -- LIGHTS ON: dark maps (Rock Tunnel ...) ask for darkness through
-    -- setDark; forcing the flag off renders them lit.  FLASH still sets
-    -- save.flashLit, which is then harmless.
+    -- LIGHTS ON: setMap arms PaletteFX for a dark map before loading it,
+    -- then calls setDark.  Wrapping setDark recursively reloads the map in
+    -- RED++'s baked-palette path, so make vanilla setMap take its normal
+    -- FLASH-lit branch instead.  The save flag is only borrowed during the
+    -- map entry and is restored immediately afterward.
     if not OverworldState._qolTogglesLightsInstalled then
       OverworldState._qolTogglesLightsInstalled = true
-      local vanillaSetDark = OverworldState.setDark
-      OverworldState.setDark = function(self, on)
-        if get("lights_on") then on = false end
-        return vanillaSetDark(self, on)
+      local vanillaSetMap = OverworldState.setMap
+      local function isDarkMap(mapId)
+        local darkDef = Game.data and Game.data.field
+                      and Game.data.field.darkMaps
+        for _, darkMapId in ipairs(darkDef and darkDef.maps or {}) do
+          if darkMapId == mapId then return true end
+        end
+        return false
+      end
+      OverworldState.setMap = function(self, mapId, ...)
+        local save = Game.save
+        if not (get("lights_on") and save and isDarkMap(mapId)) then
+          return vanillaSetMap(self, mapId, ...)
+        end
+        local previousFlashLit = save.flashLit
+        save.flashLit = true
+        local result = { pcall(vanillaSetMap, self, mapId, ...) }
+        save.flashLit = previousFlashLit
+        if not result[1] then error(result[2], 0) end
+        return unpack(result, 2)
       end
     end
 

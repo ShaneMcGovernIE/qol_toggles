@@ -1,10 +1,11 @@
 {
   "id": "qol_toggles",
   "name": "QoL Toggles",
-  "version": "1.17.3",
+  "version": "1.18.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
+  "games": ["gen1", "gen2"],
   "category": "QOL",
   "priority": 100,
   "dependencies": [],

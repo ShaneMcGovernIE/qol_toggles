@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, Battle Palace-style auto battling from Gen 1 DVs and stat EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, and hold-B running.",
+  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, Battle Palace-style auto battling from Gen 1 DVs and stat EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, and hold-B running. Works on Red/Blue/Yellow and Gold.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -42,6 +42,7 @@ return {
       "a QOL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
     },
     known = {
+      "On Gold, the Gen 1-cart-only toggles (QUICK S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M), AUTO BATTLER, POKEBALL BONUS, BULK MART, UNLIMITED TMs, FORGETTABLE HMs) do not appear in the submenu -- Gold's mart, TM/HM-learn and battle-item APIs have no honest equivalent yet.  The rest behave the same on both generations",
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
       "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship ON; the other twenty-two, including AUTO BATTLER, ship OFF.  Toggles persist in options.lua, independent of save files",
       "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",

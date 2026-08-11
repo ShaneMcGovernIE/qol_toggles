@@ -1,1 +1,2 @@
 tests/qol_toggles_test.lua
+tests/wrap_compose_test.lua

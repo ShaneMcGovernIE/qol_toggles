@@ -14,6 +14,50 @@ local TypeChart = require("src.battle.TypeChart")
 TypeChart.load(Data)
 
 local loadRoot = os.getenv("QOL_TOGGLES_ROOT")
+
+-- ------------------------------------------------ Gen 2 load gate
+-- Runs FIRST: a fresh fixture dataset (not the shared Data) so the gen2
+-- registries do not collide with the gen1 load below, and the mod's install
+-- guards are cleared afterwards so the gen1 entry chunk re-runs in full.
+
+do
+  local GameVersion = require("src.core.GameVersion")
+  local savedVersion = GameVersion.get and GameVersion.get()
+  if GameVersion.set then GameVersion.set("gold") end
+  local fresh = require("tests.modkit.fixtures").fresh()
+  local run2 = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
+    { data = fresh, generation = 2, root = loadRoot })
+  T.eq(run2.mod and run2.mod.state, "loaded",
+    "loads on gen 2: " .. tostring(run2.mod and run2.mod.skipReason))
+  T.eq(#run2.errors, 0, "gen 2 load has no boot errors")
+  local ex2 = run2.loader.exports.qol_toggles
+  T.neq(ex2, nil, "gen 2 exports reachable")
+
+  -- gen1-tagged toggles (S.S. Anne, Game Corner, dark caves, Dramatic Shape,
+  -- last item, auto battler, mart, TM/HM surgery) drop out of the list on a
+  -- Gold boot; the rest stay.  gen2 is passed explicitly because the gen1
+  -- engine this suite runs on cannot reach the loader's gen2 flag.
+  local state = {}
+  local rows = ex2.toggleRows(function(k) return state[k] end,
+                             function(k, v) state[k] = v end, true)
+  local shown = {}
+  for _, row in ipairs(rows) do shown[row.id] = true end
+  for _, id in ipairs({ "quick_ssanne", "bulk_coins", "lights_on",
+                        "mouse_cam_lock", "last_item", "auto_battler",
+                        "free_great_ball", "bulk_mart", "unlimited_tms",
+                        "forgettable_hms" }) do
+    T.eq(shown[id], nil, "gen 2 hides the gen1-only toggle " .. id)
+  end
+  T.eq(shown["poison_save"], true, "gen 2 keeps POISON SAVE")
+  T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
+  T.eq(shown["map_location"], true, "gen 2 keeps MAP LOCATION")
+  T.eq(ex2.enabledCount(function() return true end, true), #rows,
+    "gen 2 enabled count matches the shown rows")
+  if ex2.clearInstallGuards then ex2.clearInstallGuards() end
+  run2.release()
+  if GameVersion.set then GameVersion.set(savedVersion or "red") end
+end
+
 local run = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
   { data = Data, root = loadRoot })
 T.eq(#run.errors, 0, "loads clean (" .. tostring(run.errors[1]) .. ")")

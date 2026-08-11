@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.18.0] - 2026-08-11
+
+### Added
+
+- Gold (Gen 2) support. The manifest now declares `"games": ["gen1",
+  "gen2"]`, and the toggles that have a Gen 2 home are ported to Gold's
+  second engine: POISON SAVE (wraps `StepEvents.poisonStep`), HEAL ON MAP
+  CHANGE (wraps `gen2.World:setMap`), AUTO-REPEL (wraps
+  `StepEvents.repelStep`), the AUTO-REPEL / MAP LOCATION toast (draws via
+  the `render.hud` hook), KEEP MONEY (snapshot on `battle.ended`),
+  AUTO CUT (wraps `gen2.Player:tryMove` + `FieldMoves.tryCutOW`),
+  ALWAYS CATCH (wraps `gen2.Catching.attempt(opts)`), REMEMBER CURSOR /
+  REMEMBER MOVE (reset the Gen 2 battle screen's menu/move cursors), FULL
+  HEAL CATCH / PERFECT DVS / HEAL AFTER BATTLE (Gen 2 Mon's heal/stat
+  shapes), and FIELD MOVES ALL / BADGELESS MOVES (Gen 2's
+  `save.player.badges` gate). The submenu renders its rows on Gold without
+  the Gen 1-only OptionRows module.
+- The toggles that are Gen 1-cart mechanics Gold does not have — QUICK
+  S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M),
+  AUTO BATTLER, POKEBALL BONUS, BULK MART, UNLIMITED TMs and
+  FORGETTABLE HMs — no longer appear in the QOL TOGGLES submenu on a Gold
+  boot (they stay on Red/Blue/Yellow). Gold's mart, TM/HM-learn and battle
+  item APIs are structurally different, so those toggles have no honest Gen 2
+  equivalent yet.
+
 ## [1.17.2] - 2026-08-07
 
 ### Changed

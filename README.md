@@ -1,6 +1,6 @@
 # QoL Toggles
 
-Adds a QOL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save.
+Adds a QOL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save. Works on Red/Blue/Yellow **and Gold**: the toggles with a Gen 2 home are ported to Gold's second engine, and the Gen 1-cart-only ones (S.S. Anne, Game Corner, dark caves, Dramatic Shape camera, battle items, marts, TM/HM-learn) drop out of the list on a Gold boot instead of doing nothing.
 
 ## Try it
 

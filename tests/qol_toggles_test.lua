@@ -44,13 +44,14 @@ do
   for _, row in ipairs(rows) do shown[row.id] = true end
   for _, id in ipairs({ "quick_ssanne", "bulk_coins", "lights_on",
                         "mouse_cam_lock", "last_item", "auto_battler",
-                        "free_great_ball", "bulk_mart", "unlimited_tms",
+                        "free_great_ball", "bulk_mart",
                         "forgettable_hms" }) do
     T.eq(shown[id], nil, "gen 2 hides the gen1-only toggle " .. id)
   end
   T.eq(shown["poison_save"], true, "gen 2 keeps POISON SAVE")
   T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
   T.eq(shown["map_location"], true, "gen 2 keeps MAP LOCATION")
+  T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
     "gen 2 enabled count matches the shown rows")
   if ex2.clearInstallGuards then ex2.clearInstallGuards() end

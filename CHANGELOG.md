@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.18.1] - 2026-08-11
+
+### Fixed
+
+- UNLIMITED TMs is back on Gold. The first 1.18.0 Gen 2 port shipped it
+  gated to Gen 1 — the toggle was missing from the QOL TOGGLES submenu on a
+  Gold boot — because Gold's TM teach consumes the machine through
+  `Game2:consumeItem` rather than Gen 1's `ItemEffects.use`. It now works on
+  both generations: on Gen 2 the toggle skips `Game2:consumeItem` for a TM
+  (an item whose record teaches a move, non-HM) while it is on, so the
+  machine is kept; off, HMs and non-TM items consume exactly as vanilla.
+
 ## [1.18.0] - 2026-08-11
 
 ### Added
@@ -14,16 +26,17 @@
   ALWAYS CATCH (wraps `gen2.Catching.attempt(opts)`), REMEMBER CURSOR /
   REMEMBER MOVE (reset the Gen 2 battle screen's menu/move cursors), FULL
   HEAL CATCH / PERFECT DVS / HEAL AFTER BATTLE (Gen 2 Mon's heal/stat
-  shapes), and FIELD MOVES ALL / BADGELESS MOVES (Gen 2's
-  `save.player.badges` gate). The submenu renders its rows on Gold without
-  the Gen 1-only OptionRows module.
+  shapes), FIELD MOVES ALL / BADGELESS MOVES (Gen 2's
+  `save.player.badges` gate), and UNLIMITED TMs (Gen 2's
+  `Game2:consumeItem` skips teaching TMs while the toggle is on). The
+  submenu renders its rows on Gold without the Gen 1-only OptionRows module.
 - The toggles that are Gen 1-cart mechanics Gold does not have — QUICK
   S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M),
-  AUTO BATTLER, POKEBALL BONUS, BULK MART, UNLIMITED TMs and
-  FORGETTABLE HMs — no longer appear in the QOL TOGGLES submenu on a Gold
-  boot (they stay on Red/Blue/Yellow). Gold's mart, TM/HM-learn and battle
-  item APIs are structurally different, so those toggles have no honest Gen 2
-  equivalent yet.
+  AUTO BATTLER, POKEBALL BONUS, BULK MART and FORGETTABLE HMs — no longer
+  appear in the QOL TOGGLES submenu on a Gold boot (they stay on
+  Red/Blue/Yellow). Gold's mart, battle-item and HM-forget APIs are
+  structurally different, so those toggles have no honest Gen 2 equivalent
+  yet.
 
 ## [1.17.2] - 2026-08-07
 

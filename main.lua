@@ -236,7 +236,7 @@ local TOGGLES = {
     help = "FLY, SURF, CUT,\nSTRENGTH and\nFLASH work\nwithout their\nbadges." },
   { key = "hm_item_required", label = "HM ITEM REQUIRED", default = true,
     help = "HM move slots only\nappear once you\nhold the HM item.\vMoves a mon\nalready knows are\nnever gated." },
-  { key = "unlimited_tms", label = "UNLIMITED TMs", default = true, gen1 = true,
+  { key = "unlimited_tms", label = "UNLIMITED TMs", default = true,
     help = "TMs teach their\nmove without\nbeing used up." },
   { key = "forgettable_hms", label = "FORGETTABLE HMs", default = true, gen1 = true,
     help = "HM moves can be\nforgotten when a\nmon learns a new\nmove." },
@@ -2569,12 +2569,30 @@ return function(mod)
 
   -- UNLIMITED TMs / FORGETTABLE HMs: patched once per session like the
   -- PartyMenu wrap below -- the toggle reads through get() at use time.
-  -- The same wrap records the last bag item that actually went off (LAST
-  -- ITEM (M)); failed uses and TM teaches (learn/learnkept, which only
-  -- spend the machine in the field) are never remembered.  Both toggles are
-  -- gen1-tagged: Gold's ItemEffects is a per-item record API and its move
-  -- learn/forget runs through Game2:learnMoveOn with the HM gate inside,
-  -- so these Gen 1 module wraps are Gen 1 only.
+  -- UNLIMITED TMs runs on both generations: Gen 1's ItemEffects.use remaps
+  -- the "learn" result (the consume signal) to "learnkept"; Gold's TM teach
+  -- goes through Game2:useFieldItem -> learnMoveOn -> Game2:consumeItem, so
+  -- the wrap skips consumeItem for a teaching TM while the toggle is on.
+  -- FORGETTABLE HMs is gen1-tagged: Gold's HM-forget gate lives inside
+  -- Game2:learnMoveOn / the battle's forget flow, not a MoveLearnMenu.
+  if GEN2 then
+    local Game2 = require("src.core.Game2")
+    if not Game2._qolTogglesUnlimitedTmsInstalled then
+      Game2._qolTogglesUnlimitedTmsInstalled = true
+      local vanillaConsume = Game2.consumeItem
+      Game2.consumeItem = function(self, itemId)
+        if get("unlimited_tms") then
+          local def = self.data and self.data.items and self.data.items[itemId]
+          local teaches = def and def.teaches
+          if teaches and tostring(itemId):sub(1, 3) ~= "HM_" then
+            -- a TM teaches without being consumed; HMs were never consumed
+            return
+          end
+        end
+        return vanillaConsume(self, itemId)
+      end
+    end
+  end
   if not GEN2 then
     local ItemEffects = require("src.inventory.ItemEffects")
     if not ItemEffects._qolTogglesUnlimitedTmsInstalled then

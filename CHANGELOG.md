@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.18.2] - 2026-08-11
+
+### Fixed
+
+- CATCH GIVES EXP works on Gold (Gen 2). The engine's catch site hands
+  `Catching.attempt` a flat opts table that never carries the battle, so
+  `Battle:caught` — the only place the `battle.catch_exp` hook is consulted —
+  never runs on a Gold capture and the toggle paid zero EXP. The award is now
+  paid from the `pokemon.caught` event through the engine's own
+  `Battle:awardExperience` path, and the emitted EXP / level events are routed
+  to the battle screen, so the EXP bar crawl, "grew to level" lines,
+  move-learn prompts and post-battle evolution all show as they do on Red.
+
 ## [1.18.1] - 2026-08-11
 
 ### Fixed

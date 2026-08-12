@@ -54,6 +54,73 @@ do
   T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
     "gen 2 enabled count matches the shown rows")
+
+  -- CATCH GIVES EXP (Gold): the gen 2 engine's Catching.attempt never
+  -- receives a battle, so Battle:caught -- the only site that consults
+  -- battle.catch_exp -- never runs and a capture pays no EXP.  The mod pays
+  -- the award from pokemon.caught via Battle:awardExperience and routes the
+  -- emitted events to the battle screen.  Assert the mod-side contract with
+  -- a stub battle (the real src/battle/gen2/Battle is only on the engine's
+  -- g2 branch, so it cannot be required here): toggle gate, the
+  -- caughtHandled latch, and the event hand-off to the screen.
+  local savedMods = Game.mods
+  local savedStack = Game.stack
+  Game.mods = run2.loader
+  run2.loader.modOptions = run2.loader.modOptions or {}
+  run2.loader.modOptions.qol_toggles = run2.loader.modOptions.qol_toggles or {}
+  local g2bucket = run2.loader.modOptions.qol_toggles
+
+  local g2award = { times = 0, mon = nil }
+  local g2screen = { pushed = {} }
+  function g2screen:pushAll(events)
+    for _, e in ipairs(events) do self.pushed[#self.pushed + 1] = e end
+  end
+
+  local mon = { name = "STUBBAT" }
+  g2bucket.catch_exp = true
+  do
+    local battle = {
+      events = {},
+      awardExperience = function(self, mon2)
+        g2award.times = g2award.times + 1
+        g2award.mon = mon2
+        self.events[#self.events + 1] =
+          { kind = "experience", index = 1, amount = 10, text = "stub" }
+      end,
+    }
+    g2screen.battle = battle
+    Game.stack = { states = { g2screen } }
+    T.eq(ex2.giveCatchExp(battle, mon), true,
+      "CATCH GIVES EXP (Gold): the catch pays the faint award")
+    T.eq(g2award.times, 1, "Gold catch calls awardExperience exactly once")
+    T.eq(g2award.mon, mon, "Gold catch awards with the caught mon")
+    T.eq(battle.caughtHandled, true, "Gold catch latches caughtHandled")
+    T.eq(#g2screen.pushed, 1, "Gold catch routes the exp event to the screen")
+    T.eq(ex2.giveCatchExp(battle, mon), false,
+      "caughtHandled keeps a second call from paying twice")
+  end
+
+  g2bucket.catch_exp = false
+  do
+    local battle = {
+      events = {},
+      awardExperience = function(self, mon2)
+        g2award.times = g2award.times + 1
+        g2award.mon = mon2
+        self.events[#self.events + 1] =
+          { kind = "experience", index = 1, amount = 10, text = "stub" }
+      end,
+    }
+    g2screen.battle = battle
+    Game.stack = { states = { g2screen } }
+    T.eq(ex2.giveCatchExp(battle, mon), false,
+      "CATCH GIVES EXP (Gold): toggle OFF pays nothing")
+    T.eq(g2award.times, 1, "Gold catch: no award when the toggle is OFF")
+    T.eq(battle.caughtHandled, nil, "Gold catch: latch unset when OFF")
+  end
+
+  Game.stack = savedStack
+  Game.mods = savedMods
   if ex2.clearInstallGuards then ex2.clearInstallGuards() end
   run2.release()
   if GameVersion.set then GameVersion.set(savedVersion or "red") end

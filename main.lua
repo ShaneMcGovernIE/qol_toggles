@@ -290,19 +290,30 @@ local TOGGLES = {
     help = "Entering a new\narea shows its\nname in a toast\nthat fades out,\nlike AUTO-REPEL." },
 }
 
--- the out-of-battle moves the party menu can offer (PartyMenu's own list)
+-- the out-of-battle moves the party menu can offer (PartyMenu's own list).
+-- Gen 1's menu has eight; Gold's PartyMenu.FIELD_MOVES adds the Gen 2 HMs
+-- and the TM/soft moves to fourteen.  learnableFieldMoves picks the list by
+-- generation so the phantom rows match what the engine's list builder would
+-- have offered a mon that already knew the move.
 local FIELD_MOVES = { "FLY", "FLASH", "CUT", "SURF", "STRENGTH",
                       "SOFTBOILED", "TELEPORT", "DIG" }
+local FIELD_MOVES_GEN2 = { "CUT", "FLY", "SURF", "STRENGTH", "FLASH",
+                           "WATERFALL", "WHIRLPOOL", "DIG", "TELEPORT",
+                           "SOFTBOILED", "HEADBUTT", "ROCK_SMASH",
+                           "MILK_DRINK", "SWEET_SCENT" }
 
 -- the HM badges the party menu's list builder and hmBadges gate check
 local HM_BADGES = { "THUNDERBADGE", "BOULDERBADGE", "CASCADEBADGE",
                     "SOULBADGE", "RAINBOWBADGE" }
 
 -- the item each HM field move is owned by (the RomExtractor keys items
--- as HM_<MOVE>); HM ITEM REQUIRED gates the phantom slots on holding it
+-- as HM_<MOVE>); HM ITEM REQUIRED gates the phantom slots on holding it.
+-- Gold adds the two HMs Gen 1 never had; HEADBUTT, ROCK_SMASH, DIG,
+-- TELEPORT and SWEET_SCENT are TMs in Gen 2, so they have no item gate.
 local HM_ITEMS = {
   CUT = "HM_CUT", FLY = "HM_FLY", SURF = "HM_SURF",
   STRENGTH = "HM_STRENGTH", FLASH = "HM_FLASH",
+  WATERFALL = "HM_WATERFALL", WHIRLPOOL = "HM_WHIRLPOOL",
 }
 
 -- MAP LOCATION: display names that correct the town map data -- the town
@@ -436,9 +447,19 @@ return function(mod)
     end
   end
 
+  -- Gen 1 learnsets are `{level, move}` rows (learnset); Gen 2 writes the
+  -- same rows as levelMoves plus a flat level1Moves id list.  Reading all
+  -- three keeps FIELD MOVES ALL's learnability check honest on both
+  -- generations.
   local function canLearn(def, id)
     for _, entry in ipairs(def.learnset or {}) do
       if entry.move == id then return true end
+    end
+    for _, entry in ipairs(def.levelMoves or {}) do
+      if entry.move == id then return true end
+    end
+    for _, mv in ipairs(def.level1Moves or {}) do
+      if mv == id then return true end
     end
     for _, tm in ipairs(def.tmhm or {}) do
       if tm == id then return true end
@@ -1353,7 +1374,8 @@ return function(mod)
   -- and the player does not hold the item
   mod.exports.learnableFieldMoves = function(def, mon, inventory, requireHm)
     local out = {}
-    for _, id in ipairs(FIELD_MOVES) do
+    local list = GEN2 and FIELD_MOVES_GEN2 or FIELD_MOVES
+    for _, id in ipairs(list) do
       if def and canLearn(def, id) and not knows(mon, id) then
         local item = HM_ITEMS[id]
         if not requireHm or not item or (inventory and inventory[item]) then
@@ -1362,6 +1384,47 @@ return function(mod)
       end
     end
     return out
+  end
+
+  -- Gold's ui.party.submenu wrap body (pure, exported for headless tests):
+  -- run the downstream chain first, then drop the phantom field-move rows in
+  -- before the first fixed option (STATS).  The engine's updateSubmenu
+  -- dispatches `item.fieldMove` to useFieldMove, so the rows act exactly
+  -- like a known move; ctx.battle (the battle SWITCH/STATS box) and eggs
+  -- stay vanilla.
+  mod.exports.submenuRows = function(next, game, items, mon, ctx)
+    if (ctx and ctx.battle) or (mon and mon.isEgg) then
+      return next(game, items, mon, ctx)
+    end
+    local allMoves = get("field_moves_all")
+    local badgeless = get("badgeless_moves")
+    if not allMoves and not badgeless then
+      return next(game, items, mon, ctx)
+    end
+    local data = game and game.data
+    local def = data and data.pokemon and data.pokemon[mon and mon.species]
+    if not def then return next(game, items, mon, ctx) end
+    local inventory = game and game.save and game.save.inventory
+    local learnable = mod.exports.learnableFieldMoves(def, mon, inventory,
+                                                      get("hm_item_required"))
+    if #learnable == 0 then return next(game, items, mon, ctx) end
+    -- run the rest of the chain first so a higher-priority hook sees the
+    -- vanilla list, then drop the phantom rows in before STATS.
+    local list = next(game, items, mon, ctx)
+    if type(list) ~= "table" then list = items end
+    local insertAt = #list + 1
+    for i, row in ipairs(list) do
+      if not row.fieldMove then insertAt = i break end
+    end
+    local moves = data and data.moves
+    for _, id in ipairs(learnable) do
+      local mdef = moves and moves[id]
+      table.insert(list, insertAt, {
+        id = id, label = (mdef and mdef.name) or id, fieldMove = true,
+      })
+      insertAt = insertAt + 1
+    end
+    return list
   end
 
   -- append phantom move slots so the vanilla party-menu list builder shows
@@ -2628,10 +2691,12 @@ return function(mod)
     end
   end
 
-  -- one wrap per session; hot reload re-runs entry chunks.  The PartyMenu
-  -- phantom-move wrap is Gen 1 only: Gold's PartyMenu builds its field-move
-  -- list from mon.moves through buildSubmenuItems, and the mod's phantom
-  -- attach/detach is written against the Gen 1 menu's update shape.
+  -- one wrap per session; hot reload re-runs entry chunks.  The phantom-move
+  -- party-menu wrap differs by generation: Gen 1 attaches phantom slots to
+  -- mon.moves before PartyMenu.update (whose list builder reads mon.moves
+  -- inline), while Gen 2's PartyMenu builds its list through buildSubmenuItems
+  -- and passes it through the ui.party.submenu hook, so the phantom rows are
+  -- added to that list instead (the else arm below).
   if Game._qolTogglesPartyMenuInstalled then return end
   Game._qolTogglesPartyMenuInstalled = true
 
@@ -2641,6 +2706,21 @@ return function(mod)
     PartyMenu.update = function(self, dt)
       return mod.exports.withPhantoms(self, vanillaUpdate, dt)
     end
+  else
+    -- Gold: PartyMenu:submenuItems (src/ui/gen2/PartyMenu.lua) hands its
+    -- assembled list through the ui.party.submenu hook -- the same name and
+    -- the same (game, items, mon, ctx) payload Gen 1 uses -- so the phantom
+    -- rows attach here instead of to mon.moves.  The list builder has
+    -- already decided the field-move rows from mon.moves, so the learnable
+    -- moves are added as rows before the first fixed option (STATS), and
+    -- updateSubmenu's `item.fieldMove` arm routes selection to
+    -- FieldMoves.fromMenu, whose badgeGate keeps the toggle's badge rules.
+    -- The body is a pure export (submenuRows) so the headless suite can
+    -- drive the toggle gates without a gen2 engine -- this engine has no
+    -- src/battle/gen2, src/core/Game2 etc. to load a real Gold boot.
+    mod.hooks:wrap("ui.party.submenu", function(next, game, items, mon, ctx)
+      return mod.exports.submenuRows(next, game, items, mon, ctx)
+    end)
   end
 
   -- ALWAYS CATCH: every ball lands, Master Ball style.  Gen 1's

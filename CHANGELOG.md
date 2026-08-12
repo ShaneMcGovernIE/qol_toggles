@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.18.2] - 2026-08-11
+
+### Fixed
+
+- FIELD MOVES ALL works on Gold. The 1.18.0 Gen 2 port only applied the
+  toggle at use time (`fieldmove.eligibility`); Gold's PartyMenu builds its
+  field-move submenu from the moves a mon already knows, so learnable-but-
+  unknown moves never appeared as menu rows. The mod now wraps Gold's
+  `ui.party.submenu` list hook and inserts phantom rows (before STATS) for
+  every field move the selected mon can learn but does not yet know, with
+  the same HM ITEM REQUIRED and badge rules as Gen 1. The learnability
+  check also reads Gen 2 learnsets (`levelMoves` rows and `level1Moves`),
+  and the Gen 2 HM items WATERFALL and WHIRLPOOL are now recognized.
+
 ## [1.18.1] - 2026-08-11
 
 ### Fixed

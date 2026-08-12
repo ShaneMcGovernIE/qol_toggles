@@ -641,6 +641,140 @@ do
   bucket.badgeless_moves = false
 end
 
+-- ------------------------------------------------ Gen 2 submenu wrap
+-- Gold's PartyMenu builds the field-move submenu from mon.moves, so the
+-- wrap installs on ui.party.submenu (GEN2 arm) and its body is exported
+-- as submenuRows.  This suite drives the pure export directly because the
+-- gen1 engine checkout this runs on has no gen2 modules: a real Gold load
+-- of the mod would crash on require("src.core.Game2").
+
+do
+  -- canLearn reads Gen 2 learnsets too: levelMoves `{level, move}` rows and
+  -- the flat level1Moves id list (Gen 1 only has learnset + tmhm).
+  local def = { levelMoves = { { level = 5, move = "FLY" } },
+                tmhm = { "DIG" } }
+  local mon = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
+  local learnable = ex.learnableFieldMoves(def, mon, { HM_FLY = 1 }, true)
+  T.eq(#learnable, 2, "gen 2 levelMoves + tmhm qualify")
+  T.eq(learnable[1], "FLY", "a levelMoves row move qualifies")
+  T.eq(learnable[2], "DIG", "a tmhm move qualifies")
+
+  local lvl1 = { level1Moves = { "FLY" } }
+  T.eq(#ex.learnableFieldMoves(lvl1, mon, { HM_FLY = 1 }, true), 1,
+    "a level1Moves entry qualifies")
+  T.eq(ex.learnableFieldMoves(lvl1, mon, {}, true)[1], nil,
+    "level1Moves FLY still respects the HM item gate")
+
+  local none = { levelMoves = {}, level1Moves = {} }
+  T.eq(#ex.learnableFieldMoves(none, mon, { HM_FLY = 1 }, true), 0,
+    "a gen 2 def with no field moves gets nothing")
+end
+
+do
+  -- the wrap body: a learnable-but-unknown FLY (levelMoves) and DIG (tmhm)
+  -- get phantom rows in engine order before the fixed STATS option.
+  local def = { levelMoves = { { level = 5, move = "FLY" } },
+                tmhm = { "DIG" } }
+  local mon = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
+  local game = { data = { pokemon = { FIXFLYER = def },
+                          moves = { FLY = { name = "FLY" },
+                                    DIG = { name = "DIG" } } },
+                 save = { inventory = { HM_FLY = 1 } } }
+  local function freshItems()
+    return { { label = "STATS" }, { label = "SWITCH" } }
+  end
+  local function vanilla(_, items) return items end
+
+  bucket.field_moves_all = true
+  bucket.badgeless_moves = false
+  bucket.hm_item_required = true
+  local rows = ex.submenuRows(vanilla, game, freshItems(), mon,
+                              { battle = false })
+  T.eq(#rows, 4, "gen 2 submenu: two phantom rows before STATS")
+  T.eq(rows[1].id, "FLY", "FLY phantom is first")
+  T.eq(rows[1].label, "FLY", "phantom label resolves from data.moves")
+  T.eq(rows[1].fieldMove, true, "phantom rows are tagged fieldMove")
+  T.eq(rows[2].id, "DIG", "DIG phantom follows FLY")
+  T.eq(rows[3].label, "STATS", "STATS keeps its slot")
+  T.eq(rows[4].label, "SWITCH", "SWITCH stays last")
+
+  -- a known move never gets a phantom row
+  local knowsFly = { species = "FIXFLYER",
+                     moves = { { id = "FIX_TACKLE" }, { id = "FLY" } } }
+  rows = ex.submenuRows(vanilla, game, freshItems(), knowsFly,
+                        { battle = false })
+  T.eq(#rows, 3, "a mon that knows FLY gets only the DIG phantom")
+  T.eq(rows[1].id, "DIG", "the unknown move is still offered")
+end
+
+do
+  -- gate: both toggles off, in battle, and eggs all stay vanilla
+  local def = { levelMoves = { { level = 5, move = "FLY" } } }
+  local mon = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
+  local game = { data = { pokemon = { FIXFLYER = def },
+                          moves = { FLY = { name = "FLY" } } },
+                 save = { inventory = { HM_FLY = 1 } } }
+  local function freshItems()
+    return { { label = "STATS" } }
+  end
+  local function vanilla(_, items) return items end
+
+  bucket.field_moves_all = false
+  bucket.badgeless_moves = false
+  local rows = ex.submenuRows(vanilla, game, freshItems(), mon,
+                              { battle = false })
+  T.eq(#rows, 1, "both toggles off: no phantom rows")
+  T.eq(rows[1].label, "STATS", "the vanilla list passes through")
+
+  bucket.field_moves_all = true
+  rows = ex.submenuRows(vanilla, game, freshItems(), mon, { battle = true })
+  T.eq(#rows, 1, "in battle: no phantom rows")
+  rows = ex.submenuRows(vanilla, game, freshItems(), mon, {})
+  T.eq(#rows, 2, "a nil ctx.battle behaves like the party menu")
+  rows = ex.submenuRows(vanilla, game, freshItems(),
+                        { species = "FIXFLYER", isEgg = true },
+                        { battle = false })
+  T.eq(#rows, 1, "an egg gets no phantom rows")
+
+  rows = ex.submenuRows(vanilla, game, freshItems(),
+                        { species = "NOPE", moves = {} }, { battle = false })
+  T.eq(#rows, 1, "a missing species def stays vanilla")
+end
+
+do
+  -- HM ITEM REQUIRED gates the phantom HM slots exactly as on Gen 1
+  local def = { levelMoves = { { level = 5, move = "FLY" } },
+                tmhm = { "DIG" } }
+  local mon = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
+  local game = { data = { pokemon = { FIXFLYER = def },
+                          moves = { FLY = { name = "FLY" },
+                                    DIG = { name = "DIG" } } },
+                 save = { inventory = {} } }
+  local function freshItems()
+    return { { label = "STATS" } }
+  end
+  local function vanilla(_, items) return items end
+
+  bucket.field_moves_all = true
+  bucket.hm_item_required = true
+  local rows = ex.submenuRows(vanilla, game, freshItems(), mon,
+                              { battle = false })
+  T.eq(#rows, 2, "no HM_FLY held: only the item-less DIG phantom")
+  T.eq(rows[1].id, "DIG", "DIG has no HM item, so it always shows")
+
+  game.save.inventory.HM_FLY = 1
+  rows = ex.submenuRows(vanilla, game, freshItems(), mon, { battle = false })
+  T.eq(#rows, 3, "holding HM_FLY brings the FLY phantom back")
+  T.eq(rows[1].id, "FLY", "FLY sits ahead of DIG once allowed")
+  game.save.inventory.HM_FLY = nil
+
+  bucket.hm_item_required = false
+  rows = ex.submenuRows(vanilla, game, freshItems(), mon, { battle = false })
+  T.eq(#rows, 3, "toggle OFF: the item gate lifts")
+  bucket.hm_item_required = nil
+  bucket.field_moves_all = false
+end
+
 -- ------------------------------------------- UNLIMITED TMs / HM FORGET
 
 do

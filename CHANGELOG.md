@@ -1,17 +1,25 @@
 # Changelog
 
-## [1.18.2] - 2026-08-11
+## [1.18.2] - 2026-08-12
 
 ### Fixed
 
-- CATCH GIVES EXP works on Gold (Gen 2). The engine's catch site hands
-  `Catching.attempt` a flat opts table that never carries the battle, so
-  `Battle:caught` — the only place the `battle.catch_exp` hook is consulted —
-  never runs on a Gold capture and the toggle paid zero EXP. The award is now
-  paid from the `pokemon.caught` event through the engine's own
-  `Battle:awardExperience` path, and the emitted EXP / level events are routed
-  to the battle screen, so the EXP bar crawl, "grew to level" lines,
-  move-learn prompts and post-battle evolution all show as they do on Red.
+- CATCH GIVES EXP works on Gold. Catching a Pokémon now awards the EXP you
+  earned for the capture — the bar crawl, "grew to level" lines, move-learn
+  prompts and post-battle evolution all show as they do on Red. Previously a
+  Gold capture paid zero EXP because the engine never consulted the hook the
+  toggle uses.
+- FIELD MOVES ALL works on Gold. The party menu now lists field moves your
+  Pokémon can learn but hasn't learned yet, not just the ones it already
+  knows. The same HM ITEM REQUIRED and badge rules as Red apply, and Gold's
+  Waterfall and Whirlpool are recognized as HM items.
+- POISON SAVE works on Gold. A poisoned Pokémon no longer faints from step
+  damage while the toggle is on — it is clamped at 1 HP just like on Red.
+  Previously the toggle had no effect on Gold because it didn't recognize
+  Gold's status spellings.
+- Toggle settings persist across restarts on Gold. Flipping a toggle in the
+  QOL TOGGLES submenu and restarting no longer resets your choices — they are
+  saved on both generations.
 
 ## [1.18.1] - 2026-08-11
 

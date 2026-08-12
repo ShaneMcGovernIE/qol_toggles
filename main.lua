@@ -1246,12 +1246,15 @@ return function(mod)
   -- a poisoned mon at or below the damage threshold survives at 1 HP and
   -- its poison subsides (status cleared); returns the subsided mons so the
   -- caller can queue the message.  Gen 1 names the status "PSN"; Gold's
-  -- Mon uses "psn"/"tox" (src/world/gen2/StepEvents.lua:36-38).
+  -- battle writes "poison"/"toxic" into mon.status and older saves carry
+  -- "psn"/"tox" -- the same spellings StepEvents.isPoisoned accepts
+  -- (src/world/gen2/StepEvents.lua:36-40).
   mod.exports.poisonClamp = function(party, damage)
     local subsided = {}
     for _, mon in ipairs(party) do
       local poisoned = mon.status == "PSN" or mon.status == "psn"
-        or mon.status == "tox"
+        or mon.status == "tox" or mon.status == "poison"
+        or mon.status == "toxic"
       if poisoned and mon.hp > 0 and mon.hp <= damage then
         mon.hp = 1
         mon.status = nil

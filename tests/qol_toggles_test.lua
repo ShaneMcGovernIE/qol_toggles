@@ -261,6 +261,22 @@ do
   T.eq(b.hp, 3, "3 HP is untouched")
 end
 
+do
+  -- Gold's battle writes "poison"/"toxic" into mon.status (only "psn"/"tox"
+  -- are older-save spellings): both must clamp or the POISON SAVE toggle
+  -- does nothing on Gen 2.
+  local poison = { species = "FIXMON_A", nickname = "Weedle", status = "poison", hp = 1 }
+  local toxic = { species = "FIXMON_A", nickname = "Gloom", status = "toxic", hp = 1 }
+  local sub = ex.poisonClamp({ poison, toxic }, 1)
+  T.eq(#sub, 2, "Gold poison and toxic 1-HP mons both subside")
+  T.eq(poison.hp, 1, "poison-status mon keeps 1 HP")
+  T.eq(poison.status, nil, "poison status cleared")
+  T.eq(toxic.hp, 1, "toxic-status mon keeps 1 HP")
+  T.eq(toxic.status, nil, "toxic status cleared")
+  T.eq(sub[1], poison, "the poison-status mon is returned")
+  T.eq(sub[2], toxic, "the toxic-status mon is returned")
+end
+
 -- ------------------------------------------------ FULL HEAL CATCH
 
 do

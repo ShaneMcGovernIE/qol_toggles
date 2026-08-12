@@ -68,6 +68,7 @@
 
 local Game = require("src.core.Game")
 local GameVersion = require("src.core.GameVersion")
+local Runtime = require("src.mods.Runtime")
 
 -- 1 (Red/Blue/Yellow) or 2 (Gold).  Computed inside the entry chunk below:
 -- GameVersion on a real Gold boot, else the live loader's generation (the
@@ -1310,6 +1311,53 @@ return function(mod)
     return mon.hp == mon.stats.hp and mon.status == nil
   end
 
+  -- Gold-only catch EXP: the gen 2 engine's Catching.attempt never receives
+  -- a battle (the ball arm in BattleState:useItem passes a flat opts table),
+  -- so Battle:caught -- the only site that consults battle.catch_exp -- never
+  -- runs and a capture pays no EXP.  Pay the award from pokemon.caught (which
+  -- carries the live battle and the caught mon, and which fires AFTER the mon
+  -- is in the party/PC) through the engine's own Battle:awardExperience path,
+  -- then hand the emitted exp/level events to the battle screen so the EXP
+  -- bar crawl, "grew to level" lines and post-battle evolution still show.
+  -- The battle.catch_exp wrap above is the one toggle gate; setting
+  -- caughtHandled -- the latch Battle:caught would have set -- keeps a
+  -- future engine fix that reaches Battle:caught from paying twice.
+  mod.exports.giveCatchExp = function(battle, mon)
+    if not (battle and mon) then return false end
+    if battle.caughtHandled then return false end
+    if not battle.awardExperience then return false end
+    if Runtime.wantsHook("battle.catch_exp")
+        and Runtime.call("battle.catch_exp", function() return false end,
+          { battle = battle }) then
+      battle.caughtHandled = true
+      local events = battle.events or {}
+      local before = #events
+      battle:awardExperience(mon)
+      -- The screen owns the queue, and the engine's own takeEvents drains
+      -- never run on the catch path, so the award's exp/level events are
+      -- handed to it here -- the tail awardExperience appended, nothing that
+      -- was already queued.
+      local added = {}
+      for i = before + 1, #events do added[#added + 1] = events[i] end
+      for i = #events, before + 1, -1 do events[i] = nil end
+      if #added > 0 then
+        local screen
+        local stack = Game.stack
+        local states = stack and stack.states
+        for i = #(states or {}), 1, -1 do
+          local s = states[i]
+          if s and s.battle == battle then
+            screen = s
+            break
+          end
+        end
+        if screen and screen.pushAll then screen:pushAll(added) end
+      end
+      return true
+    end
+    return false
+  end
+
   -- full heal + PP restore for the whole party (HEAL ON MAP CHANGE)
   mod.exports.healParty = function(party)
     if GEN2 then
@@ -2424,11 +2472,16 @@ return function(mod)
   -- PERFECT DVS + FULL HEAL CATCH: storeCaughtMon places the mon (party or
   -- PC) before emitting pokemon.caught, so mutating the payload covers
   -- both.  DVs first (stats recomputed), then the heal reads the new max.
+  -- Gold has no Battle:caught (the flat catch opts never carry the battle),
+  -- so the engine's battle.catch_exp hook never fires there and a capture
+  -- pays zero EXP.  Pay it from pokemon.caught instead, which fires after
+  -- the mon joins the party/PC.  Gen 1 keeps its engine-driven award.
   mod.events:on("pokemon.caught", function(ev)
     if not (ev and ev.mon) then return end
     local data = (ev.game and ev.game.data) or Game.data
     if get("perfect_dvs") then mod.exports.perfectDVs(ev.mon, data) end
     if get("catch_heal") then mod.exports.healCaught(ev.mon) end
+    if GEN2 then mod.exports.giveCatchExp(ev.battle, ev.mon) end
   end)
 
   -- REMEMBER CURSOR / REMEMBER MOVE: turn_ended fires when the turn's

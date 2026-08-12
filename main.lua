@@ -377,6 +377,8 @@ return function(mod)
   -- replace the save's modData outright, which silently discarded toggles
   -- set from the title screen, and an unsaved session lost them on quit.
   -- options.lua survives both, so a toggle flips once and stays flipped.
+  -- Gold namespaces save.options under options.lua's `gold` block, so set()
+  -- mirrors each flip into that namespace as well (issue #9) -- see set().
   -- the stored value for a key, falling back to the per-toggle default:
   -- everything except INFINITE REPEL ships ON
   mod.exports.defaultFor = function(key)
@@ -409,7 +411,34 @@ return function(mod)
       Game.save.options.modOptions[mod.id][key] = value
     end
     if Game.writeOptions then Game:writeOptions() end
+    -- Gold's engine reads/persists mod options under options.lua's `gold`
+    -- namespace, while the loader reads the TOP-LEVEL modOptions bucket at
+    -- boot (Loader:_loadState -> SaveData.loadOptions(fs).modOptions).
+    -- Mirror the flip into both so it survives a restart (issue #9).
+    -- Gen 1's writeOptions already lands in the top-level bucket, so this
+    -- only runs on Gen 2.  The full table from loadOptions carries every
+    -- other gold key (battleScene, color, modProfiles, ...), so none are
+    -- clobbered.
+    if GEN2 and loader.fs then
+      local ok, SaveData = pcall(require, "src.core.SaveData")
+      if ok and SaveData then
+        local opts = SaveData.loadOptions(loader.fs) or {}
+        opts.modOptions = opts.modOptions or {}
+        opts.modOptions[mod.id] = opts.modOptions[mod.id] or {}
+        opts.modOptions[mod.id][key] = value
+        if opts.gold then
+          opts.gold.modOptions = opts.gold.modOptions or {}
+          opts.gold.modOptions[mod.id] = opts.gold.modOptions[mod.id] or {}
+          opts.gold.modOptions[mod.id][key] = value
+        end
+        SaveData.saveOptions(opts, loader.fs)
+      end
+    end
   end
+
+  -- the live setter, exported so the headless suite can drive the exact
+  -- persistence path (Gen1 and Gen2 buckets) without poking the UI
+  mod.exports.set = set
 
   local function knows(mon, id)
     for _, mv in ipairs(mon.moves or {}) do

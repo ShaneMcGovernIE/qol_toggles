@@ -59,6 +59,109 @@ do
   if GameVersion.set then GameVersion.set(savedVersion or "red") end
 end
 
+-- ----------------------------------- Gen2 persistence round-trip (issue #9)
+-- Gold's engine reads/persists mod options under options.lua's `gold`
+-- namespace while the loader reads the TOP-LEVEL modOptions bucket at boot
+-- (Loader:_loadState -> SaveData.loadOptions(fs).modOptions), so the mod's
+-- flips reverted on restart.  set() mirrors each flip into both buckets.
+-- This drives the real set() against a memfs options.lua carrying the live
+-- bifurcation, then re-reads the file through the same loadOptions the
+-- loader uses at boot to prove the flip lands in both buckets.
+
+do
+  local GameVersion = require("src.core.GameVersion")
+  local SaveData = require("src.core.SaveData")
+  local savedVersion = GameVersion.get and GameVersion.get()
+  local savedMods = Game.mods
+  local savedSave = Game.save
+  local savedWriteOptions = Game.writeOptions
+  if GameVersion.set then GameVersion.set("gold") end
+  -- this (Gen 1) engine's GameVersion has no gold, so the mod's GEN2 flag
+  -- resolves through Game.mods.generation -- mirror the real boot, where
+  -- the loader is assigned before mods run
+  Game.mods = { generation = 2 }
+  -- Gold's engine carries src.core.Game2 / src.battle.gen2.* etc.; the
+  -- GEN2 entry path monkey-patches them at load.  Stub the gold-only
+  -- modules so the suite can boot the gold path headless (restored below).
+  local goldStubs = {
+    ["src.core.Game2"] = { consumeItem = function(self, itemId) return true end },
+    ["src.battle.gen2.Catching"] = { attempt = function() return false, 0 end },
+    ["src.battle.gen2.Mon"] = { stats = function() return {} end },
+    ["src.world.gen2.World"] = {},
+    ["src.world.gen2.StepEvents"] = {},
+    ["src.world.gen2.Player"] = {},
+    ["src.world.gen2.FieldMoves"] = {},
+  }
+  local savedPreloads = {}
+  for k, v in pairs(goldStubs) do
+    savedPreloads[k] = package.preload[k]
+    package.preload[k] = function() return v end
+  end
+  local fresh = require("tests.modkit.fixtures").fresh()
+  local run2 = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
+    { data = fresh, generation = 2, root = loadRoot })
+  T.eq(#run2.errors, 0, "gen 2 persistence load has no boot errors")
+  local ex2 = run2.loader.exports.qol_toggles
+  T.neq(ex2.set, nil, "gen 2 set() is exported")
+
+  -- the live Gold bifurcation: the loader's top-level bucket holds the
+  -- mod's stale writes (REPEL off) while the gold namespace holds the
+  -- player's real flip (REPEL on)
+  local fs = T.sdk.memfs({ ["options.lua"] = [==[
+return {
+  lastVersion = "red",
+  mods = { qol_toggles = true },
+  modOptions = {
+    qol_toggles = { repel = false, remember_cursor = false },
+  },
+  gold = {
+    battleStyle = "SET",
+    modOptions = {
+      qol_toggles = { repel = true },
+    },
+  },
+}
+]==] })
+  run2.loader.fs = fs
+  Game.mods = run2.loader
+  Game.save = {
+    options = {
+      battleStyle = "SET",
+      modOptions = { qol_toggles = { repel = true } },
+    },
+  }
+  -- Gold's writeOptions persists save.options under the `gold` namespace,
+  -- leaving the rest of options.lua (incl. the top-level bucket) intact
+  Game.writeOptions = function()
+    local opts = SaveData.loadOptions(fs) or {}
+    opts.gold = Game.save.options
+    SaveData.saveOptions(opts, fs)
+  end
+
+  ex2.set("repel", true)
+  T.eq(run2.loader.modOptions.qol_toggles.repel, true,
+    "set updates the live loader bucket")
+  T.eq(Game.save.options.modOptions.qol_toggles.repel, true,
+    "set mirrors into the gold save namespace")
+  local disk = SaveData.loadOptions(fs)
+  T.eq(disk.modOptions.qol_toggles.repel, true,
+    "set writes the top-level bucket the loader reads at boot (issue #9)")
+  T.eq(disk.gold.modOptions.qol_toggles.repel, true,
+    "set writes the gold bucket the engine reads at boot")
+  T.eq(disk.gold.battleStyle, "SET",
+    "set preserves the other gold keys")
+  T.eq(disk.modOptions.qol_toggles.remember_cursor, false,
+    "set preserves the other toggles")
+
+  Game.mods = savedMods
+  Game.save = savedSave
+  Game.writeOptions = savedWriteOptions
+  if ex2.clearInstallGuards then ex2.clearInstallGuards() end
+  run2.release()
+  if GameVersion.set then GameVersion.set(savedVersion or "red") end
+  for k, v in pairs(savedPreloads) do package.preload[k] = v end
+end
+
 local run = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
   { data = Data, root = loadRoot })
 T.eq(#run.errors, 0, "loads clean (" .. tostring(run.errors[1]) .. ")")

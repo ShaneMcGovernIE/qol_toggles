@@ -321,7 +321,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 32, "thirty-two toggles in the submenu")
+T.eq(#rows, 33, "thirty-three toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -336,24 +336,25 @@ T.eq(rows[11].id, "exp_mult", "toggle 11: EXP x2")
 T.eq(rows[12].id, "catch_exp", "toggle 12: catch gives EXP")
 T.eq(rows[13].id, "instant_flee", "toggle 13: instant flee")
 T.eq(rows[14].id, "remember_cursor", "toggle 14: remember battle cursor")
-T.eq(rows[15].id, "heal_map_change", "toggle 15: heal on map change")
-T.eq(rows[16].id, "quick_ssanne", "toggle 16: quick S.S. Anne")
-T.eq(rows[17].id, "last_item", "toggle 17: last item in battle")
-T.eq(rows[18].id, "free_great_ball", "toggle 18: free Great Ball bonus")
-T.eq(rows[19].id, "mouse_cam_lock", "toggle 19: lock Dramatic Shape's mouse camera")
-T.eq(rows[20].id, "no_enc_dupes", "toggle 20: no encounter dupes")
-T.eq(rows[21].id, "instant_fish", "toggle 21: instant fish")
-T.eq(rows[22].id, "heal_battle", "toggle 22: heal after battle")
-T.eq(rows[23].id, "auto_repel", "toggle 23: auto-repel")
-T.eq(rows[24].id, "bulk_mart", "toggle 24: bulk mart")
-T.eq(rows[25].id, "bulk_coins", "toggle 25: bulk coins")
-T.eq(rows[26].id, "lights_on", "toggle 26: lights on")
-T.eq(rows[27].id, "remember_move", "toggle 27: remember move")
-T.eq(rows[28].id, "keep_money", "toggle 28: keep money")
-T.eq(rows[29].id, "auto_cut", "toggle 29: auto cut")
-T.eq(rows[30].id, "run_hold_b", "toggle 30: run (hold B)")
-T.eq(rows[31].id, "auto_battler", "toggle 31: Battle Palace auto battler")
-T.eq(rows[32].id, "map_location", "toggle 32: map location toast")
+T.eq(rows[15].id, "b_to_run", "toggle 15: B to run")
+T.eq(rows[16].id, "heal_map_change", "toggle 16: heal on map change")
+T.eq(rows[17].id, "quick_ssanne", "toggle 17: quick S.S. Anne")
+T.eq(rows[18].id, "last_item", "toggle 18: last item in battle")
+T.eq(rows[19].id, "free_great_ball", "toggle 19: free Great Ball bonus")
+T.eq(rows[20].id, "mouse_cam_lock", "toggle 20: lock Dramatic Shape's mouse camera")
+T.eq(rows[21].id, "no_enc_dupes", "toggle 21: no encounter dupes")
+T.eq(rows[22].id, "instant_fish", "toggle 22: instant fish")
+T.eq(rows[23].id, "heal_battle", "toggle 23: heal after battle")
+T.eq(rows[24].id, "auto_repel", "toggle 24: auto-repel")
+T.eq(rows[25].id, "bulk_mart", "toggle 25: bulk mart")
+T.eq(rows[26].id, "bulk_coins", "toggle 26: bulk coins")
+T.eq(rows[27].id, "lights_on", "toggle 27: lights on")
+T.eq(rows[28].id, "remember_move", "toggle 28: remember move")
+T.eq(rows[29].id, "keep_money", "toggle 29: keep money")
+T.eq(rows[30].id, "auto_cut", "toggle 30: auto cut")
+T.eq(rows[31].id, "run_hold_b", "toggle 31: run (hold B)")
+T.eq(rows[32].id, "auto_battler", "toggle 32: Battle Palace auto battler")
+T.eq(rows[33].id, "map_location", "toggle 33: map location toast")
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
@@ -370,6 +371,7 @@ T.eq(ex.defaultFor("exp_mult"), false, "EXP x2 ships OFF")
 T.eq(ex.defaultFor("catch_exp"), false, "CATCH GIVES EXP ships OFF")
 T.eq(ex.defaultFor("instant_flee"), false, "INSTANT FLEE ships OFF")
 T.eq(ex.defaultFor("remember_cursor"), true, "REMEMBER CURSOR ships ON")
+T.eq(ex.defaultFor("b_to_run"), false, "B TO RUN ships OFF")
 T.eq(ex.defaultFor("heal_map_change"), false, "HEAL ON MAP CHANGE ships OFF")
 T.eq(ex.defaultFor("quick_ssanne"), false, "QUICK S.S. ANNE ships OFF")
 T.eq(ex.defaultFor("last_item"), false, "LAST ITEM (M) ships OFF")
@@ -1093,6 +1095,69 @@ do
   battle.menuIndex = 3
   Runtime.emit("battle.turn_ended", { battle = battle, turn = 3 })
   T.eq(battle.menuIndex, 3, "turn_ended leaves the cursor when ON")
+end
+
+-- ------------------------------------------------ B TO RUN
+
+do
+  local function battle(pressedB, over)
+    over = over or {}
+    local pressed = { b = pressedB or false }
+    local input = { wasPressed = function(self, btn)
+      return btn == "b" and pressed.b or false
+    end }
+    local b = {
+      menuIndex = over.menuIndex or 2,
+      phase = over.phase or "menu",
+      demo = over.demo or false,
+      safari = over.safari or false,
+      ghost = over.ghost or false,
+      kind = over.kind,
+      spectating = over.spectating or false,
+      menuLockedAction = over.locked and function() return true end or nil,
+      game = { input = input },
+      player = { mon = { hp = over.hp or 10 } },
+    }
+    return b
+  end
+
+  -- toggle ON + B at the menu root parks the cursor on RUN (index 4)
+  local b = battle(true)
+  T.eq(ex.menuBToRun(b, true), 4, "B at the menu root jumps to RUN")
+  T.eq(b.menuIndex, 4, "menuIndex is 4 (RUN)")
+
+  -- no B press: the cursor stays put
+  local noB = battle(false, { menuIndex = 3 })
+  T.eq(ex.menuBToRun(noB, true), 3, "no B press leaves the cursor")
+
+  -- toggle OFF: even a B press is ignored
+  local off = battle(true, { menuIndex = 2 })
+  T.eq(ex.menuBToRun(off, false), 2, "toggle OFF ignores B")
+
+  -- not the menu phase (move select backs out on B instead)
+  local move = battle(true, { phase = "moveSelect", menuIndex = 1 })
+  T.eq(ex.menuBToRun(move, true), 1, "move-select phase is untouched")
+
+  -- excluded menus: demo, safari, link, spectating
+  T.eq(ex.menuBToRun(battle(true, { demo = true }), true), 2,
+    "demo battle is untouched")
+  T.eq(ex.menuBToRun(battle(true, { safari = true }), true), 2,
+    "safari battle is untouched")
+  T.eq(ex.menuBToRun(battle(true, { kind = "link" }), true), 2,
+    "link battle is untouched")
+  T.eq(ex.menuBToRun(battle(true, { spectating = true }), true), 2,
+    "spectated battle is untouched")
+
+  -- a locked action (thrash/rage/recharge) keeps the real menu closed
+  T.eq(ex.menuBToRun(battle(true, { locked = true }), true), 2,
+    "a locked action is untouched")
+
+  -- a fainted active mon opens the forced replacement screen, not RUN
+  T.eq(ex.menuBToRun(battle(true, { hp = 0 }), true), 2,
+    "a fainted active mon is untouched")
+
+  -- a missing battle is a no-op
+  T.eq(ex.menuBToRun(nil, true), nil, "a missing battle is a no-op")
 end
 
 -- ------------------------------------------------ HEAL ON MAP CHANGE

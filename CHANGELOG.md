@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.19.0] - 2026-08-13
+
+### Added
+
+- B TO RUN. A new toggle makes B at the root of the battle menu move the
+  cursor to RUN; A still confirms the escape. Vanilla Gen 1 has no B branch
+  at the menu root (B only backs out of move select), so the shortcut takes
+  nothing away. It rides the shared `BattleState.update` seam on both
+  generations and never fires in the old man's demo battle, a Safari battle,
+  a link or spectated battle, or while a locked action (Thrash, Rage,
+  recharge) owns the turn. Ships OFF.
+
 ## [1.18.2] - 2026-08-12
 
 ### Fixed

@@ -26,6 +26,8 @@
 --   INSTANT FLEE     wild battles always escape on the first try
 --   REMEMBER CURSOR  the battle FIGHT/BAG/PKMN/RUN cursor stays where it
 --                    was last turn; OFF restores the fresh-FIGHT default
+--   B TO RUN         press B at the root of the battle menu to move the
+--                    cursor to RUN (A still confirms the escape)
 --   LAST ITEM (M)    in battle, M uses the last item used from the bag:
 --                    balls throw at the foe, healing asks which mon
 --   POKEBALL BONUS   buying 10 POKé BALLS at any mart gets you a free
@@ -253,6 +255,8 @@ local TOGGLES = {
     help = "Wild battles\nalways escape on\nthe first try,\nfrom the RUN menu\nand the faint\ndialogue both." },
   { key = "remember_cursor", label = "REMEMBER CURSOR", default = true,
     help = "The battle menu\ncursor stays\nwhere you left it\nacross turns.\vOFF restores\nthe fresh FIGHT\ndefault each turn" },
+  { key = "b_to_run", label = "B TO RUN", default = false,
+    help = "Press B at the\nroot of the\nbattle menu to\nmove the cursor\nto RUN.\vA then confirms\nthe escape." },
   { key = "heal_map_change", label = "HEAL ON MAP CHANGE", default = false,
     help = "Every map change\nfully heals the\nparty: HP, status\nand all PP." },
   { key = "quick_ssanne", label = "QUICK S.S. ANNE", default = false, gen1 = true,
@@ -1598,6 +1602,29 @@ return function(mod)
     return battle and battle.menuIndex or nil
   end
 
+  -- B TO RUN: at the root of the battle menu (phase "menu"), a B press
+  -- parks the cursor on RUN.  Vanilla Gen 1 has no B branch here -- B
+  -- only backs out of move select -- so intercepting it is collision
+  -- free.  Demo (old man) and Safari battles use different menus and are
+  -- skipped; a locked action (thrash/rage/recharge) keeps the real menu
+  -- unreachable so it is skipped too.  A fainted active mon opens the
+  -- forced replacement screen instead, so that path is left alone.
+  -- Returns the cursor's landing position for headless tests.
+  mod.exports.menuBToRun = function(battle, on)
+    if not battle or not on or battle.phase ~= "menu"
+       or battle.demo or battle.safari or battle.ghost
+       or battle.kind == "link" or battle.spectating
+       or (battle.menuLockedAction and battle:menuLockedAction(battle.player))
+       or not battle.game or not battle.game.input
+       or not battle.game.input:wasPressed("b")
+       or not battle.player or not battle.player.mon
+       or battle.player.mon.hp == 0 then
+      return battle and battle.menuIndex or nil
+    end
+    battle.menuIndex = 4 -- 4 = RUN
+    return battle.menuIndex
+  end
+
   -- FORGETTABLE HMs: MoveLearnMenu.update blocks the HM moves through a
   -- module-local HM_MOVES table, so while the toggle is on the wrap below
   -- swaps in this gate-free copy of the same update (the vanilla body
@@ -2090,6 +2117,23 @@ return function(mod)
         end
       end
       return r1, r2
+    end
+  end
+
+  -- B TO RUN: park the battle menu cursor on RUN when B is pressed at the
+  -- menu root.  Vanilla Gen 1 has no B branch in phase "menu" (B only
+  -- backs out of move select), so this wrap runs the cursor move before
+  -- the vanilla menu input handler and never fights an existing action.
+  -- It rides the shared BattleState.update seam so it lands on both Gen 1
+  -- and Gold's write-through facade (the same phase/menuIndex/input shape).
+  if not Game._qolTogglesBToRunInstalled then
+    Game._qolTogglesBToRunInstalled = true
+    local vanillaUpdate = BattleState.update
+    BattleState.update = function(self, dt)
+      if get("b_to_run") then
+        mod.exports.menuBToRun(self, true)
+      end
+      return vanillaUpdate(self, dt)
     end
   end
 

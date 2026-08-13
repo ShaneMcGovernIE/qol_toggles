@@ -55,6 +55,11 @@ love .
   you left it across turns: use BAG to heal one turn, and the cursor is
   still on BAG the next.  OFF restores the vanilla fresh-FIGHT default
   every turn.
+- **B TO RUN** — press B at the root of the battle menu and the cursor
+  jumps straight to RUN; A then confirms the escape.  (Vanilla B does
+  nothing there, so nothing is taken away.)  It never fires in the old
+  man's demo battle, a Safari battle, or while a locked action like
+  Thrash or recharge owns the turn.
 - **HEAL ON MAP CHANGE** — every map transition (routes, caves, warps,
   connections, even boot) fully heals the party: HP, status, and all
   PP.

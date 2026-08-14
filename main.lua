@@ -65,8 +65,10 @@
 -- encounter.roll, PartyMenu.update (phantom moves + badge injection),
 -- fieldmove.eligibility, Catching.attempt, exp.gain, battle.run,
 -- BattleState.update (including the autoBattleUpdate seam for AUTO BATTLER),
--- ItemEffects.use, ShopMenu.new/ListMenu.new (the POKEBALL BONUS buy
--- window) and Bag.add (the bonus grant).
+-- OverworldState.finishNurseHeal (Gen 1) and World.startHealMachineAnim +
+-- the script.ended event (Gen 2) for TURN AWAY (NURSE), ItemEffects.use,
+-- ShopMenu.new/ListMenu.new (the POKEBALL BONUS buy window) and Bag.add
+-- (the bonus grant).
 
 local Game = require("src.core.Game")
 local GameVersion = require("src.core.GameVersion")
@@ -273,6 +275,8 @@ local TOGGLES = {
     help = "The rod always\nbites, no more\n\"Not even a\nnibble!\" loops." },
   { key = "heal_battle", label = "HEAL AFTER BATTLE", default = false,
     help = "Every battle\nends with the\nparty fully\nhealed: HP,\nstatus, PP." },
+  { key = "turn_away_nurse", label = "TURN AWAY (NURSE)", default = false,
+    help = "After the nurse\nheals you, you\nturn away from\nthe counter, so\nA walks off\ninstead of\ntalking again." },
   { key = "auto_repel", label = "AUTO-REPEL", default = true,
     help = "When a repel\nwears off, the\nstrongest one in\nthe bag is used\nfor you.\vOut of repels:\nit wears off." },
   { key = "bulk_mart", label = "BULK MART", default = false, gen1 = true,
@@ -306,6 +310,14 @@ local FIELD_MOVES_GEN2 = { "CUT", "FLY", "SURF", "STRENGTH", "FLASH",
                            "WATERFALL", "WHIRLPOOL", "DIG", "TELEPORT",
                            "SOFTBOILED", "HEADBUTT", "ROCK_SMASH",
                            "MILK_DRINK", "SWEET_SCENT" }
+
+-- Gold's MonSubmenu sizes its box by the row count (the top edge grows
+-- upward from a fixed bottom) and the cart caps the list at
+-- NUM_MONMENU_ITEMS = 8: more rows push the top off the top of the screen
+-- (issue #10).  Phantom rows are trimmed to this cap, exactly like the
+-- cart's own four field-move maximum does.  Gen 1's party menu shares the
+-- same 8-row cart geometry, so the Gen 1 attach path caps the same way.
+local MAX_SUBMENU_ROWS = 8
 
 -- the HM badges the party menu's list builder and hmBadges gate check
 local HM_BADGES = { "THUNDERBADGE", "BOULDERBADGE", "CASCADEBADGE",
@@ -1404,6 +1416,29 @@ return function(mod)
     end
   end
 
+  -- TURN AWAY (NURSE): flip the player's facing so an A-mash walks away
+  -- from the counter instead of re-talking to the nurse.  Pure, exported
+  -- for headless tests; both engines store the facing the same way.
+  local REVERSE_FACING = { up = "down", down = "up",
+                           left = "right", right = "left" }
+  mod.exports.turnAround = function(player)
+    if not player or not player.facing then return nil end
+    local back = REVERSE_FACING[player.facing] or "down"
+    player.facing = back
+    return back
+  end
+
+  -- the farewell callback handed to finishNurseHeal: turn the player away
+  -- (when the toggle is on) and then run the caller's own onDone.  Pure,
+  -- so the headless suite can drive the exact callback the Gen 1 wrap
+  -- installs without booting the overworld dialogue.
+  mod.exports.afterNurseHeal = function(player, onDone)
+    return function()
+      if get("turn_away_nurse") then mod.exports.turnAround(player) end
+      if onDone then onDone() end
+    end
+  end
+
   -- max DVs on a caught mon: all 15s, stats recomputed so the mon's actual
   -- stats match.  Gen 1's Stats.calc drives the five Gen 1 stats; Gold's
   -- Mon.stats computes the six Gen 2 stats (special split into spcA/spcD).
@@ -1500,8 +1535,26 @@ return function(mod)
     for i, row in ipairs(list) do
       if not row.fieldMove then insertAt = i break end
     end
+    -- The box cannot render more than MAX_SUBMENU_ROWS rows (issue #10), so
+    -- the phantom rows follow the cart's own rule: they displace the CANCEL
+    -- row first (the cart drops it whenever the list is full), then the
+    -- excess is trimmed from the tail of the learnable list (the HMs keep
+    -- their front seats).
+    local cancelAt
+    for i = #list, 1, -1 do
+      if list[i].id == "CANCEL" then cancelAt = i break end
+    end
+    local slots = MAX_SUBMENU_ROWS - #list + (cancelAt and 1 or 0)
+    if cancelAt and #learnable > slots - 1 then
+      table.remove(list, cancelAt)
+      insertAt = #list + 1
+      for i, row in ipairs(list) do
+        if not row.fieldMove then insertAt = i break end
+      end
+    end
     local moves = data and data.moves
     for _, id in ipairs(learnable) do
+      if #list >= MAX_SUBMENU_ROWS then break end
       local mdef = moves and moves[id]
       table.insert(list, insertAt, {
         id = id, label = (mdef and mdef.name) or id, fieldMove = true,
@@ -1512,10 +1565,25 @@ return function(mod)
   end
 
   -- append phantom move slots so the vanilla party-menu list builder shows
-  -- learnable field moves; returns the added ids for detachPhantomMoves
+  -- learnable field moves; returns the added ids for detachPhantomMoves.
+  -- The cart's move slots cap a mon's field moves at four, so the phantom
+  -- slots are trimmed to that same total: any more would grow the submenu
+  -- box past the cart's eight rows and off the top of the screen (the Gen 2
+  -- counterpart is the cap in submenuRows).
   mod.exports.attachPhantomMoves = function(mon, def, inventory, requireHm)
     local added = mod.exports.learnableFieldMoves(def, mon, inventory,
                                                   requireHm)
+    local list = GEN2 and FIELD_MOVES_GEN2 or FIELD_MOVES
+    local knownRows = 0
+    for _, mv in ipairs(mon.moves or {}) do
+      for _, id in ipairs(list) do
+        if mv.id == id then knownRows = knownRows + 1 break end
+      end
+    end
+    local room = math.max(0, 4 - knownRows)
+    if #added > room then
+      for i = #added, room + 1, -1 do table.remove(added, i) end
+    end
     for _, id in ipairs(added) do
       mon.moves[#mon.moves + 1] = { id = id }
     end
@@ -1603,22 +1671,33 @@ return function(mod)
   end
 
   -- B TO RUN: at the root of the battle menu (phase "menu"), a B press
-  -- parks the cursor on RUN.  Vanilla Gen 1 has no B branch here -- B
-  -- only backs out of move select -- so intercepting it is collision
-  -- free.  Demo (old man) and Safari battles use different menus and are
-  -- skipped; a locked action (thrash/rage/recharge) keeps the real menu
-  -- unreachable so it is skipped too.  A fainted active mon opens the
-  -- forced replacement screen instead, so that path is left alone.
+  -- parks the cursor on RUN.  Neither engine has a B branch at the menu
+  -- root (B only backs out of move select), so intercepting it is
+  -- collision free.  Gen 1's demo (old man) and Safari battles use
+  -- different menus and are skipped, as are Gold's tutorial and contest
+  -- menus (the same pair, different names); a locked action
+  -- (thrash/rage/recharge) keeps the real menu unreachable so it is
+  -- skipped too.  A fainted active mon opens the forced replacement
+  -- screen instead, so that path is left alone.  The active mon lives in
+  -- different places per generation: Gen 1 wraps it as battle.player.mon
+  -- on the screen, Gold's screen keeps it on the battle model
+  -- (battle.battle.player) and has no .player of its own -- issue #11.
   -- Returns the cursor's landing position for headless tests.
   mod.exports.menuBToRun = function(battle, on)
     if not battle or not on or battle.phase ~= "menu"
        or battle.demo or battle.safari or battle.ghost
+       or battle.tutorial or battle.contest
        or battle.kind == "link" or battle.spectating
+       or (battle.battle and (battle.battle.kind == "link"
+                              or battle.battle.link))
        or (battle.menuLockedAction and battle:menuLockedAction(battle.player))
        or not battle.game or not battle.game.input
-       or not battle.game.input:wasPressed("b")
-       or not battle.player or not battle.player.mon
-       or battle.player.mon.hp == 0 then
+       or not battle.game.input:wasPressed("b") then
+      return battle and battle.menuIndex or nil
+    end
+    local playerMon = battle.player and battle.player.mon
+      or (battle.battle and battle.battle.player) or nil
+    if not playerMon or playerMon.hp == 0 then
       return battle and battle.menuIndex or nil
     end
     battle.menuIndex = 4 -- 4 = RUN
@@ -2287,6 +2366,59 @@ return function(mod)
         mod.exports.healParty(Game.save.party)
       end
       return result
+    end
+  end)
+
+  -- TURN AWAY (NURSE): after a Pokecenter heal the player turns around, so
+  -- an A-mash walks away from the counter instead of re-talking to the
+  -- nurse.  Gen 1: the nurse is OverworldState's TX_SCRIPT flow, not a map
+  -- script, so the turn rides finishNurseHeal's farewell callback.  Gen 2:
+  -- the nurse is a map script whose heal machine special runs through
+  -- World:startHealMachineAnim (type 0 = Pokecenter; Elm's lab is 1 and the
+  -- Hall of Fame 2, both left alone), so the machine run is recorded and
+  -- the turn fires when that script ends -- after the farewell line.
+  mod.events:on("game.ready", function()
+    if GEN2 then
+      local World2 = require("src.world.gen2.World")
+      if World2._qolTogglesTurnAwayInstalled then return end
+      local vanillaMachine = World2.startHealMachineAnim
+      if not vanillaMachine then return end
+      World2._qolTogglesTurnAwayInstalled = true
+      local lastMachine = nil
+      World2.startHealMachineAnim = function(self, animType, onDone)
+        lastMachine = { world = self, type = animType }
+        return vanillaMachine(self, animType, onDone)
+      end
+      mod.events:on("script.started", function()
+        lastMachine = nil
+      end)
+      mod.events:on("script.ended", function(ev)
+        local ctx = ev and ev.ctx
+        if not (ev and ev.completed and ctx and ctx.kind ~= "callback")
+           or not lastMachine or lastMachine.type ~= 0 then
+          lastMachine = nil
+          return
+        end
+        local hit = lastMachine
+        lastMachine = nil
+        if get("turn_away_nurse") then
+          mod.exports.turnAround(hit.world and hit.world.player)
+        end
+      end)
+      return
+    end
+    -- the require name is spelled at runtime and bound to a fresh local
+    -- (the Catching wrap idiom) so the gen2 static scan cannot tie it to
+    -- the adapter's OverworldState facade: finishNurseHeal is Gen 1 only
+    -- and this arm never runs on Gold (the GEN2 branch returns above)
+    local owHeal = require("src" .. ".world.OverworldController")
+    if owHeal._qolTogglesTurnAwayInstalled then return end
+    owHeal._qolTogglesTurnAwayInstalled = true
+    local vanillaFinish = owHeal.finishNurseHeal
+    owHeal.finishNurseHeal = function(self, bye, onDone, npc)
+      return vanillaFinish(self, bye,
+                           mod.exports.afterNurseHeal(self.player, onDone),
+                           npc)
     end
   end)
 

@@ -28,7 +28,10 @@ love .
   TELEPORT can still TELEPORT.  Badge restrictions still apply — no FLY
   without the Thunder Badge, no SURF without the Soul Badge — and the
   usual context rules hold (FLY/TELEPORT only outdoors, FLASH only in
-  the dark, DIG only on its tilesets).
+  the dark, DIG only on its tilesets).  The field-move submenu keeps the
+  cart's own eight-row limit, so a Pokémon that can learn many field
+  moves never pushes rows off the screen — the extras simply don't fit,
+  exactly like a full moveset on the cart.
 - **BADGELESS MOVES** — the badge gates come off: FLY, SURF, CUT,
   STRENGTH and FLASH all work without their badges.  Pairs with FIELD
   MOVES ALL for a no-badge, no-moveset run.
@@ -58,8 +61,11 @@ love .
 - **B TO RUN** — press B at the root of the battle menu and the cursor
   jumps straight to RUN; A then confirms the escape.  (Vanilla B does
   nothing there, so nothing is taken away.)  It never fires in the old
-  man's demo battle, a Safari battle, or while a locked action like
-  Thrash or recharge owns the turn.
+  man's demo battle (Gold's tutorial), a Safari battle (Gold's Bug
+  Contest), a link or spectated battle, or while a locked action like
+  Thrash or recharge owns the turn.  Works on Red and Gold alike — Gold's
+  battle screen keeps the active Pokémon on its battle model, which the
+  toggle now reads too.
 - **HEAL ON MAP CHANGE** — every map transition (routes, caves, warps,
   connections, even boot) fully heals the party: HP, status, and all
   PP.
@@ -91,6 +97,10 @@ love .
   conjure — and the Old Rod's always-catch is unchanged.
 - **HEAL AFTER BATTLE** — every battle that ends (win, run, catch,
   loss) fully heals the party: HP, status, and all PP.
+- **TURN AWAY (NURSE)** — after a Pokécenter nurse heals you, you turn
+  away from the counter, so an A-mash walks you off instead of locking
+  you back into her dialogue.  The Elm's-lab and Hall-of-Fame heal
+  machines are untouched.
 - **AUTO-REPEL** — when a repel wears off, the strongest repel in the
   bag (MAX > SUPER > plain) is used automatically and announced by an
   on-screen toast — the usual "effect wore off" text is skipped when a

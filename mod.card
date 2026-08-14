@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, Battle Palace-style auto battling from Gen 1 DVs and stat EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, and hold-B running. Works on Red/Blue/Yellow and Gold.",
+  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, double EXP, Battle Palace-style auto battling from Gen 1 DVs and stat EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, an auto turn-away after the nurse heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, and hold-B running. Works on Red/Blue/Yellow and Gold.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -27,6 +27,8 @@ return {
       "a NO ENCOUNTER DUPES switch re-rolls a wild encounter that repeats the last species (session-scoped, best effort)",
       "an INSTANT FISH switch makes the rod always bite on the first try, uniform-picking the map's fishing group",
       "a HEAL AFTER BATTLE switch fully heals the party (HP, status, PP) whenever a battle ends",
+      "a TURN AWAY (NURSE) switch turns the player away from the counter after a Pokecenter heal, so mashing A walks off instead of re-talking to the nurse",
+      "the field-move submenu keeps the cart's eight-row limit, so a mon that can learn more field moves than fit never pushes rows off the screen",
       "an AUTO-REPEL switch replaces a worn-off repel from the bag automatically, strongest first, announced by an on-screen toast",
       "a BULK MART switch opens mart quantity prompts at 10 for BUY and SELL",
       "a BULK COINS switch re-asks the Celadon Game Corner clerk's offer and lets him sell 50, 500 or 9,999 coins at a time, or any amount via a CUSTOM four-digit picker (digits 0-9)",
@@ -45,7 +47,7 @@ return {
     known = {
       "On Gold, the Gen 1-cart-only toggles (QUICK S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M), AUTO BATTLER, POKEBALL BONUS, BULK MART, FORGETTABLE HMs) do not appear in the submenu -- Gold's mart, battle-item and HM-forget APIs have no honest equivalent yet.  The rest behave the same on both generations",
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship ON; the other twenty-three, including AUTO BATTLER and B TO RUN, ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship ON; the other twenty-four, including AUTO BATTLER, B TO RUN and TURN AWAY (NURSE), ship OFF.  Toggles persist in options.lua, independent of save files",
       "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",
       "AUTO CUT only fires when a party mon knows CUT (FIELD MOVES ALL does not extend to it), and the step is consumed by the cut text + animation",
       "NO ENCOUNTER DUPES is session-scoped, so a restart forgets the last species",

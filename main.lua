@@ -129,6 +129,53 @@ local function vertOffset(t, overflow)
   return scrollOffset(t, overflow, VERT_HOLD, VERT_SPEED)
 end
 
+-- The QoL submenu uses four 10x7 cards on the 160x144 Game Boy canvas.
+-- Labels get eight interior glyph columns; the remaining two columns are the
+-- card border and its one-glyph padding on either side.
+local CARD_COLUMNS = 2
+local CARD_PAGE_SIZE = 4
+local CARD_WIDTH = 10
+local CARD_HEIGHT = 7
+local CARD_LABEL_COLUMNS = 8
+
+local function cardGeometry(slot)
+  local col = (slot - 1) % CARD_COLUMNS
+  local row = math.floor((slot - 1) / CARD_COLUMNS)
+  return {
+    x = col * CARD_WIDTH,
+    y = row * CARD_HEIGHT,
+    w = CARD_WIDTH,
+    h = CARD_HEIGHT,
+  }
+end
+
+-- Absolute row navigation for the two-column pages.  `total + 1` is the
+-- centered CANCEL footer.  Moving by two preserves the column while moving
+-- between the top and bottom rows, including across page boundaries.
+local function gridMove(index, action, total)
+  total = math.max(0, tonumber(total) or 0)
+  local cancel = total + 1
+  index = tonumber(index) or 1
+  if total == 0 then return cancel end
+  if index >= cancel then
+    if action == "up" then return total end
+    if action == "down" then return 1 end
+    return cancel
+  end
+  if index < 1 then index = 1 end
+  if action == "left" then
+    return (index - 1) % CARD_COLUMNS == 1 and index - 1 or index
+  elseif action == "right" then
+    return (index - 1) % CARD_COLUMNS == 0 and index < total
+           and index + 1 or index
+  elseif action == "up" then
+    return index > CARD_COLUMNS and index - CARD_COLUMNS or cancel
+  elseif action == "down" then
+    return index + CARD_COLUMNS <= total and index + CARD_COLUMNS or cancel
+  end
+  return index
+end
+
 -- Label geometry for OptionRows rows: labels start at x=16 (OptionRows.draw)
 -- and the engine's text convention pads 8px inside the box, so a label
 -- clips at the inner right edge 152.  The GB font is a flat 8px/glyph, so
@@ -400,6 +447,16 @@ return function(mod)
     OptionRows = require("src" .. ".ui.OptionRows")
   end
 
+  local TextBox = require("src.render.TextBox")
+  local function cardLabelLines(label)
+    local pages = TextBox.paginate(label or "", CARD_LABEL_COLUMNS)
+    local lines = pages[1] or { "" }
+    for i, line in ipairs(lines) do
+      lines[i] = line:gsub("%s+$", "")
+    end
+    return lines
+  end
+
   -- Toggles ride options.lua's per-mod bucket (the same store the mod
   -- manager writes) instead of the per-save modData: NEW GAME and CONTINUE
   -- replace the save's modData outright, which silently discarded toggles
@@ -535,6 +592,7 @@ return function(mod)
         local row = {
           id = spec.key,
           label = label,
+          cardLines = cardLabelLines(label),
           help = spec.help,
           value = function()
             return getFn(spec.key) and Strings("ON") or Strings("OFF")
@@ -577,6 +635,9 @@ return function(mod)
   mod.exports.vertOffset = vertOffset
   mod.exports.tickerFor = tickerFor
   mod.exports.drawTickerLabel = drawTickerLabel
+  mod.exports.cardLabelLines = cardLabelLines
+  mod.exports.cardGeometry = cardGeometry
+  mod.exports.gridMove = gridMove
 
   -- the in-depth help for a toggle id (START / P on its row), or nil for
   -- an unknown id; the rows carry it so the menu never re-looks it up

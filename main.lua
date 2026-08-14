@@ -136,7 +136,8 @@ local CARD_COLUMNS = 2
 local CARD_PAGE_SIZE = 4
 local CARD_WIDTH = 10
 local CARD_HEIGHT = 7
-local CARD_LABEL_COLUMNS = 8
+local CARD_LABEL_COLUMNS = CARD_WIDTH - 2
+local CARD_LABEL_WIDTH = CARD_LABEL_COLUMNS * 8
 
 local function cardGeometry(slot)
   local col = (slot - 1) % CARD_COLUMNS
@@ -448,14 +449,30 @@ return function(mod)
     OptionRows = require("src" .. ".ui.OptionRows")
   end
 
-  local TextBox = require("src.render.TextBox")
   local function cardLabelLines(label)
-    local pages = TextBox.paginate(label or "", CARD_LABEL_COLUMNS)
-    local lines = pages[1] or { "" }
-    for i, line in ipairs(lines) do
-      lines[i] = line:gsub("%s+$", "")
+    label = tostring(label or "")
+    if label == "" then return { "" } end
+    local lines, current = {}, nil
+    for word in label:gmatch("%S+") do
+      local candidate = current and (current .. " " .. word) or word
+      if current and Font.width(candidate) > CARD_LABEL_WIDTH then
+        lines[#lines + 1] = current
+        current = word
+      else
+        current = candidate
+      end
     end
+    if current then lines[#lines + 1] = current end
     return lines
+  end
+
+  local function cardLineTickers(lines)
+    local tickers = {}
+    for i, line in ipairs(lines) do
+      local overflow = Font.width(line) - CARD_LABEL_WIDTH
+      if overflow > 0 then tickers[i] = { overflow = overflow } end
+    end
+    return tickers
   end
 
   -- Toggles ride options.lua's per-mod bucket (the same store the mod
@@ -590,10 +607,12 @@ return function(mod)
         -- a Gen 2 boot cannot run a Gen 1-cart mechanic; skip the row
       else
         local label = Strings(spec.label)
+        local cardLines = cardLabelLines(label)
         local row = {
           id = spec.key,
           label = label,
-          cardLines = cardLabelLines(label),
+          cardLines = cardLines,
+          cardTickers = cardLineTickers(cardLines),
           help = spec.help,
           value = function()
             return getFn(spec.key) and Strings("ON") or Strings("OFF")

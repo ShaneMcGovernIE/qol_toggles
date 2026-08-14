@@ -75,9 +75,11 @@ do
       local lines = ex2.cardLabelLines(row.label)
       T.check(#lines >= 1 and #lines <= 3,
               "gen 2 card label fits three lines (" .. row.id .. ")")
-      for _, line in ipairs(lines) do
-        T.check(Font.width(line) <= 64,
-                "gen 2 card label fits eight glyph columns (" .. row.id .. ")")
+      for i, line in ipairs(lines) do
+        T.check(Font.width(line) <= 64
+                  or (row.cardTickers and row.cardTickers[i] ~= nil),
+                "gen 2 card line fits or ticks (" .. row.id .. ": "
+                  .. line .. ")")
       end
     end
   end

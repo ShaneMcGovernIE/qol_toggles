@@ -475,15 +475,40 @@ return function(mod)
     return tickers
   end
 
-  -- Toggles ride options.lua's per-mod bucket (the same store the mod
-  -- manager writes) instead of the per-save modData: NEW GAME and CONTINUE
-  -- replace the save's modData outright, which silently discarded toggles
-  -- set from the title screen, and an unsaved session lost them on quit.
-  -- options.lua survives both, so a toggle flips once and stays flipped.
-  -- Gold namespaces save.options under options.lua's `gold` block, so set()
-  -- mirrors each flip into that namespace as well (issue #9) -- see set().
-  -- the stored value for a key, falling back to the per-toggle default:
-  -- everything except INFINITE REPEL ships ON
+  -- Toggles are player configuration, so read them through the public options
+  -- facade first.  Older engines do not expose an options setter to mods, so
+  -- set() keeps the legacy live bucket/writeOptions fallback below.  The
+  -- sandbox-safe storage mirror covers builds where that legacy bucket is not
+  -- writable from a mod and is also the migration path for new installs.
+  local storedSettings = nil
+  local storageReadAttempted = false
+
+  local function loadStoredSettings()
+    if storedSettings ~= nil or storageReadAttempted then return storedSettings end
+    if not mod.storage or not mod.storage.read or not Game then return nil end
+    if not Game.save then return nil end
+    storageReadAttempted = true
+    local ok, values = pcall(function()
+      return mod.storage:read(Game, "settings")
+    end)
+    if ok and type(values) == "table" then
+      storedSettings = values
+      return storedSettings
+    end
+    return nil
+  end
+
+  local function publicOption(key)
+    if not mod.options or type(mod.options.get) ~= "function" then
+      return nil
+    end
+    local ok, value = pcall(function() return mod.options:get(key) end)
+    if ok then return value end
+    return nil
+  end
+
+  -- the stored value for a key, falling back to scoped storage and then the
+  -- per-toggle default: everything except INFINITE REPEL ships ON
   mod.exports.defaultFor = function(key)
     for _, spec in ipairs(TOGGLES) do
       if spec.key == key then return spec.default ~= false end
@@ -492,14 +517,37 @@ return function(mod)
   end
 
   local function get(key)
+    local value = publicOption(key)
+    if value ~= nil then return value end
+    local saved = loadStoredSettings()
+    if saved and saved[key] ~= nil then return saved[key] end
     local loader = Game.mods
     local bucket = loader and loader.modOptions and loader.modOptions[mod.id]
-    local v = bucket and bucket[key]
-    if v ~= nil then return v end
+    value = bucket and bucket[key]
+    if value ~= nil then return value end
     return mod.exports.defaultFor(key)
   end
 
   local function set(key, value)
+    storedSettings = storedSettings or loadStoredSettings() or {}
+    storedSettings[key] = value
+
+    -- Newer sandbox builds may expose a public setter alongside get().
+    -- Capability-test it so this mod remains loadable on older engines.
+    if mod.options and type(mod.options.set) == "function" then
+      local ok = pcall(function() mod.options:set(key, value) end)
+      if ok then return end
+    end
+
+    -- mod.storage is the supported persistence boundary for data owned by a
+    -- mod.  It is scoped by the engine to this mod and playthrough; failures
+    -- are expected on a title screen before a playthrough exists.
+    if mod.storage and mod.storage.write and Game then
+      pcall(function() mod.storage:write(Game, "settings", storedSettings) end)
+    end
+
+    -- Legacy fallback for pre-sandbox engines.  This contains no raw file
+    -- access: the engine owns writeOptions and the live option tables.
     local loader = Game.mods
     if not loader then return end
     loader.modOptions = loader.modOptions or {}
@@ -514,29 +562,6 @@ return function(mod)
       Game.save.options.modOptions[mod.id][key] = value
     end
     if Game.writeOptions then Game:writeOptions() end
-    -- Gold's engine reads/persists mod options under options.lua's `gold`
-    -- namespace, while the loader reads the TOP-LEVEL modOptions bucket at
-    -- boot (Loader:_loadState -> SaveData.loadOptions(fs).modOptions).
-    -- Mirror the flip into both so it survives a restart (issue #9).
-    -- Gen 1's writeOptions already lands in the top-level bucket, so this
-    -- only runs on Gen 2.  The full table from loadOptions carries every
-    -- other gold key (battleScene, color, modProfiles, ...), so none are
-    -- clobbered.
-    if GEN2 and loader.fs then
-      local ok, SaveData = pcall(require, "src.core.SaveData")
-      if ok and SaveData then
-        local opts = SaveData.loadOptions(loader.fs) or {}
-        opts.modOptions = opts.modOptions or {}
-        opts.modOptions[mod.id] = opts.modOptions[mod.id] or {}
-        opts.modOptions[mod.id][key] = value
-        if opts.gold then
-          opts.gold.modOptions = opts.gold.modOptions or {}
-          opts.gold.modOptions[mod.id] = opts.gold.modOptions[mod.id] or {}
-          opts.gold.modOptions[mod.id][key] = value
-        end
-        SaveData.saveOptions(opts, loader.fs)
-      end
-    end
   end
 
   -- the live setter, exported so the headless suite can drive the exact

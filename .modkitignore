@@ -1,2 +1,12 @@
+# Local game options copied into the repository while testing.
+options.lua
+options.lua.bak
+options.lua.tmp
+
+# Development-only material is kept in the repository but not installed.
+docs/superpowers/plans/2026-08-14-qol-card-line-tickers.md
+docs/superpowers/plans/2026-08-14-qol-toggles-two-column-menu.md
+docs/superpowers/specs/2026-08-14-qol-card-line-tickers-design.md
+docs/superpowers/specs/2026-08-14-qol-toggles-two-column-menu-design.md
 tests/qol_toggles_test.lua
 tests/wrap_compose_test.lua

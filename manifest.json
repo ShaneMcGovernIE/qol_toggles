@@ -1,7 +1,7 @@
 {
   "id": "qol_toggles",
   "name": "QoL Toggles",
-  "version": "1.20.0",
+  "version": "1.20.1",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",

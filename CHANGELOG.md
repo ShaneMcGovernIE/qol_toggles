@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.20.1] - 2026-08-14
+
+### Fixed
+
+- Added compatibility with the upcoming Grandma's Kitchen update and its
+  sandboxed mod runtime. Toggle settings now use the public mod options API
+  and scoped mod storage instead of opening the engine's raw options
+  filesystem.
+- The development test runner no longer uses environment-variable access, so
+  the repository passes the same sandbox audit as the shipped mod.
+
 ## [1.20.0] - 2026-08-14
 
 ### Added

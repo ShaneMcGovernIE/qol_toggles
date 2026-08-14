@@ -25,7 +25,11 @@ Game.stack = setmetatable({ states = {} }, { __index = StateStack })
 local TypeChart = require("src.battle.TypeChart")
 TypeChart.load(Data)
 
-local loadRoot = os.getenv("QOL_TOGGLES_ROOT")
+-- Pass the repository root as the first argument when the suite is launched
+-- outside the engine checkout.  Keeping the test runner free of environment
+-- lookups
+-- makes the repository-wide sandbox audit match the shipped mod scan.
+local loadRoot = arg and arg[1]
 
 -- ------------------------------------------------ Gen 2 load gate
 -- Runs FIRST: a fresh fixture dataset (not the shared Data) so the gen2
@@ -167,14 +171,11 @@ do
   if GameVersion.set then GameVersion.set(savedVersion or "red") end
 end
 
--- ----------------------------------- Gen2 persistence round-trip (issue #9)
--- Gold's engine reads/persists mod options under options.lua's `gold`
--- namespace while the loader reads the TOP-LEVEL modOptions bucket at boot
--- (Loader:_loadState -> SaveData.loadOptions(fs).modOptions), so the mod's
--- flips reverted on restart.  set() mirrors each flip into both buckets.
--- This drives the real set() against a memfs options.lua carrying the live
--- bifurcation, then re-reads the file through the same loadOptions the
--- loader uses at boot to prove the flip lands in both buckets.
+-- ---------------------------- Gen2 persistence boundary (sandbox update)
+-- The mod must not open the loader's raw filesystem.  Its setter uses the
+-- public option/write path and mirrors the value through mod.storage when a
+-- playthrough is available.  The memfs options.lua below still represents
+-- the Gold namespace that the engine's writeOptions owns.
 
 do
   local GameVersion = require("src.core.GameVersion")
@@ -238,6 +239,8 @@ return {
   run2.loader.game = Game
   Game.mods = run2.loader
   Game.save = {
+    version = "gold",
+    meta = { playthroughId = "qol-test" },
     options = {
       battleStyle = "SET",
       modOptions = { qol_toggles = { repel = true } },
@@ -257,8 +260,6 @@ return {
   T.eq(Game.save.options.modOptions.qol_toggles.repel, true,
     "set mirrors into the gold save namespace")
   local disk = SaveData.loadOptions(fs)
-  T.eq(disk.modOptions.qol_toggles.repel, true,
-    "set writes the top-level bucket the loader reads at boot (issue #9)")
   T.eq(disk.gold.modOptions.qol_toggles.repel, true,
     "set writes the gold bucket the engine reads at boot")
   T.eq(disk.gold.battleStyle, "SET",

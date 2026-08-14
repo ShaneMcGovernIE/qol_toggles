@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.19.1] - 2026-08-14
+
+### Fixed
+
+- B TO RUN works on Gold. The toggle reads the battle cursor at the menu
+  root, but Gold's battle screen keeps the active Pokemon on the battle
+  model (battle.battle.player) instead of Gen 1's battle.player.mon, so
+  the guard bailed on every Gold battle and B never moved the cursor
+  (issue #11).  Gold's tutorial and Bug Contest menus are now skipped the
+  same way the old man's demo and Safari are on Red.
+- The Gen 2 field-move submenu no longer overflows the screen.  A Pokemon
+  that can learn more field moves than the menu can render (Feraligatr's
+  CUT/SURF/STRENGTH/WATERFALL/WHIRLPOOL/ROCK_SMASH, for example) pushed
+  rows past the top border of the party menu (issue #10).  Phantom rows
+  now respect the cart's own eight-row limit: they displace the CANCEL
+  row first, then the excess is trimmed -- the same rule the cart applies
+  to a full moveset.  Gen 1's party menu is capped the same way (the
+  cart's four-move field-row maximum).
+
+### Added
+
+- TURN AWAY (NURSE).  A new toggle makes the player turn away from the
+  counter after a Pokecenter heal, so mashing A walks you off instead of
+  locking you back into the nurse's dialogue (issue #12).  Ships OFF.
+  On Red the turn rides the end of the nurse's farewell dialogue; on Gold
+  it fires when the nurse's map script ends, and the Elm's-lab and
+  Hall-of-Fame heal machines are left alone.
+
 ## [1.19.0] - 2026-08-13
 
 ### Added

@@ -10,6 +10,18 @@ local Data = require("src.core.Data")
 local Game = require("src.core.Game")
 local vanillaGamepadDispatch = Game.gamepadpressed
 Data:load()
+-- the ROM-derived cache has no FIX_* species or moves, but this suite
+-- builds real mons through Pokemon.new(Data, "FIXMON_A", ...): register
+-- the fixture rows so those constructions resolve
+do
+  local fixture = require("tests.fixture_data").load()
+  for id, def in pairs(fixture.pokemon) do Data.pokemon[id] = def end
+  for id, def in pairs(fixture.moves) do Data.moves[id] = def end
+end
+-- the headless loader never boots Game:load, so the stack the mod's UI
+-- seams read (menuIsTop, battleTop, the dialogue pushes) is minted here
+local StateStack = require("src.core.StateStack")
+Game.stack = setmetatable({ states = {} }, { __index = StateStack })
 local TypeChart = require("src.battle.TypeChart")
 TypeChart.load(Data)
 
@@ -65,6 +77,11 @@ do
   -- caughtHandled latch, and the event hand-off to the screen.
   local savedMods = Game.mods
   local savedStack = Game.stack
+  local savedLoaderGame = run2.loader.game
+  -- the gen 2 Game facade resolves through Loader:_game(); the headless
+  -- gen 1 harness has no Game2 to inject, so point the loader at the real
+  -- Game module for this block -- the facade then sees the bucket below
+  run2.loader.game = Game
   Game.mods = run2.loader
   run2.loader.modOptions = run2.loader.modOptions or {}
   run2.loader.modOptions.qol_toggles = run2.loader.modOptions.qol_toggles or {}
@@ -121,6 +138,7 @@ do
 
   Game.stack = savedStack
   Game.mods = savedMods
+  run2.loader.game = savedLoaderGame
   if ex2.clearInstallGuards then ex2.clearInstallGuards() end
   run2.release()
   if GameVersion.set then GameVersion.set(savedVersion or "red") end
@@ -190,6 +208,11 @@ return {
 }
 ]==] })
   run2.loader.fs = fs
+  -- same live-game wiring the catch block above needs: the gen 2 Game
+  -- facade resolves through Loader:_game(), which this headless gen 1
+  -- harness never sets -- without it set() would bail on a nil Game.mods
+  local savedLoaderGame = run2.loader.game
+  run2.loader.game = Game
   Game.mods = run2.loader
   Game.save = {
     options = {
@@ -223,6 +246,7 @@ return {
   Game.mods = savedMods
   Game.save = savedSave
   Game.writeOptions = savedWriteOptions
+  run2.loader.game = savedLoaderGame
   if ex2.clearInstallGuards then ex2.clearInstallGuards() end
   run2.release()
   if GameVersion.set then GameVersion.set(savedVersion or "red") end
@@ -321,7 +345,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 33, "thirty-three toggles in the submenu")
+T.eq(#rows, 34, "thirty-four toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -345,16 +369,17 @@ T.eq(rows[20].id, "mouse_cam_lock", "toggle 20: lock Dramatic Shape's mouse came
 T.eq(rows[21].id, "no_enc_dupes", "toggle 21: no encounter dupes")
 T.eq(rows[22].id, "instant_fish", "toggle 22: instant fish")
 T.eq(rows[23].id, "heal_battle", "toggle 23: heal after battle")
-T.eq(rows[24].id, "auto_repel", "toggle 24: auto-repel")
-T.eq(rows[25].id, "bulk_mart", "toggle 25: bulk mart")
-T.eq(rows[26].id, "bulk_coins", "toggle 26: bulk coins")
-T.eq(rows[27].id, "lights_on", "toggle 27: lights on")
-T.eq(rows[28].id, "remember_move", "toggle 28: remember move")
-T.eq(rows[29].id, "keep_money", "toggle 29: keep money")
-T.eq(rows[30].id, "auto_cut", "toggle 30: auto cut")
-T.eq(rows[31].id, "run_hold_b", "toggle 31: run (hold B)")
-T.eq(rows[32].id, "auto_battler", "toggle 32: Battle Palace auto battler")
-T.eq(rows[33].id, "map_location", "toggle 33: map location toast")
+T.eq(rows[24].id, "turn_away_nurse", "toggle 24: turn away from the nurse")
+T.eq(rows[25].id, "auto_repel", "toggle 25: auto-repel")
+T.eq(rows[26].id, "bulk_mart", "toggle 26: bulk mart")
+T.eq(rows[27].id, "bulk_coins", "toggle 27: bulk coins")
+T.eq(rows[28].id, "lights_on", "toggle 28: lights on")
+T.eq(rows[29].id, "remember_move", "toggle 29: remember move")
+T.eq(rows[30].id, "keep_money", "toggle 30: keep money")
+T.eq(rows[31].id, "auto_cut", "toggle 31: auto cut")
+T.eq(rows[32].id, "run_hold_b", "toggle 32: run (hold B)")
+T.eq(rows[33].id, "auto_battler", "toggle 33: Battle Palace auto battler")
+T.eq(rows[34].id, "map_location", "toggle 34: map location toast")
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
@@ -380,6 +405,7 @@ T.eq(ex.defaultFor("mouse_cam_lock"), false, "MOUSE CAM LOCK ships OFF")
 T.eq(ex.defaultFor("no_enc_dupes"), false, "NO ENCOUNTER DUPES ships OFF")
 T.eq(ex.defaultFor("instant_fish"), false, "INSTANT FISH ships OFF")
 T.eq(ex.defaultFor("heal_battle"), false, "HEAL AFTER BATTLE ships OFF")
+T.eq(ex.defaultFor("turn_away_nurse"), false, "TURN AWAY (NURSE) ships OFF")
 T.eq(ex.defaultFor("auto_repel"), true, "AUTO-REPEL ships ON")
 T.eq(ex.defaultFor("bulk_mart"), false, "BULK MART ships OFF")
 T.eq(ex.defaultFor("bulk_coins"), false, "BULK COINS ships OFF")
@@ -502,6 +528,25 @@ do
   ex.detachPhantomMoves(mon, added)
   T.eq(#mon.moves, 1, "phantoms removed again")
   T.eq(mon.moves[1].id, "FIX_TACKLE", "the real move survives the round-trip")
+end
+
+do
+  -- the cart's four move slots cap a mon's field moves at four, so the
+  -- phantom attach path trims to that total (the party-menu box cannot
+  -- render more; the Gen 2 counterpart is the cap in submenuRows)
+  local def = { learnset = {}, tmhm = { "FLY", "FLASH", "CUT", "SURF",
+                                        "STRENGTH", "DIG" } }
+  local mon = { species = "FIXMON_A", moves = { { id = "FIX_TACKLE" },
+                                                { id = "FLY" } } }
+  local added = ex.attachPhantomMoves(mon, def, {}, false)
+  T.eq(#added, 3, "one known field move leaves three phantom slots")
+  T.eq(#mon.moves, 5, "the moveset grows to four field rows plus tackle")
+  T.eq(mon.moves[3].id, "FLASH", "the learnable HMs keep their front seats")
+  ex.detachPhantomMoves(mon, added)
+  mon.moves[3] = { id = "SURF" }
+  added = ex.attachPhantomMoves(mon, def, {}, false)
+  T.eq(#added, 2, "two known field moves leave two phantom slots")
+  ex.detachPhantomMoves(mon, added)
 end
 
 -- ------------------------------------------------ FIELD MOVES ALL wrap
@@ -773,6 +818,50 @@ do
   bucket.hm_item_required = false
   rows = ex.submenuRows(vanilla, game, freshItems(), mon, { battle = false })
   T.eq(#rows, 3, "toggle OFF: the item gate lifts")
+  bucket.hm_item_required = nil
+  bucket.field_moves_all = false
+end
+
+do
+  -- issue #10: Gold's MonSubmenu box caps at eight rows and sizes itself by
+  -- the row count, so a mon that can learn more field moves than fit must
+  -- not push rows off the top of the screen.  Phantom rows displace the
+  -- CANCEL row first (the cart drops it whenever the list is full), then
+  -- the tail of the learnable list is trimmed.
+  local def = { tmhm = { "FLY", "FLASH", "CUT", "SURF", "STRENGTH", "DIG" } }
+  local mon = { species = "FIXFLYER", moves = { { id = "FIX_TACKLE" } } }
+  local game = { data = { pokemon = { FIXFLYER = def }, moves = {} },
+                 save = { inventory = {} } }
+  local function freshItems()
+    return { { id = "STATS", label = "STATS" },
+             { id = "SWITCH", label = "SWITCH" },
+             { id = "MOVE", label = "MOVE" },
+             { id = "ITEM", label = "ITEM" },
+             { id = "CANCEL", label = "CANCEL" } }
+  end
+  local function vanilla(_, items) return items end
+
+  bucket.field_moves_all = true
+  bucket.hm_item_required = false
+  local rows = ex.submenuRows(vanilla, game, freshItems(), mon,
+                              { battle = false })
+  T.eq(#rows, 8, "the submenu never exceeds the eight-row box")
+  T.eq(rows[1].id, "FLY", "the first learnable field move keeps its seat")
+  T.eq(rows[4].id, "SURF", "the fourth phantom fills the last field row")
+  T.eq(rows[5].id, "STATS", "STATS still follows the phantom rows")
+  T.eq(rows[8].id, "ITEM", "CANCEL is displaced; the box ends on ITEM")
+  local hasCancel = false
+  for _, row in ipairs(rows) do
+    if row.id == "CANCEL" then hasCancel = true end
+  end
+  T.eq(hasCancel, false, "a full list has no CANCEL row (back out with B)")
+
+  -- a shorter learnable list keeps its CANCEL row
+  local few = { tmhm = { "FLY", "DIG" } }
+  game.data.pokemon.FIXFLYER = few
+  rows = ex.submenuRows(vanilla, game, freshItems(), mon, { battle = false })
+  T.eq(#rows, 7, "two phantom rows join the five vanilla rows")
+  T.eq(rows[7].id, "CANCEL", "CANCEL survives when the list is not full")
   bucket.hm_item_required = nil
   bucket.field_moves_all = false
 end
@@ -1112,11 +1201,17 @@ do
       demo = over.demo or false,
       safari = over.safari or false,
       ghost = over.ghost or false,
+      tutorial = over.tutorial or false,
+      contest = over.contest or false,
       kind = over.kind,
       spectating = over.spectating or false,
       menuLockedAction = over.locked and function() return true end or nil,
       game = { input = input },
-      player = { mon = { hp = over.hp or 10 } },
+      -- Gen 1 keeps the active mon on the screen as player.mon; Gold's
+      -- screen keeps it on the battle model (battle.player) and has no
+      -- .player of its own
+      player = over.gen2 and nil or { mon = { hp = over.hp or 10 } },
+      battle = over.gen2 and { player = { hp = over.hp or 10 } } or nil,
     }
     return b
   end
@@ -1156,8 +1251,67 @@ do
   T.eq(ex.menuBToRun(battle(true, { hp = 0 }), true), 2,
     "a fainted active mon is untouched")
 
+  -- Gold's screen shape (issue #11): the active mon lives on the battle
+  -- model, and B still lands on RUN
+  T.eq(ex.menuBToRun(battle(true, { gen2 = true }), true), 4,
+    "Gold's battle-model player still jumps to RUN")
+  T.eq(ex.menuBToRun(battle(true, { gen2 = true, hp = 0 }), true), 2,
+    "a fainted Gold mon opens the forced replacement screen instead")
+  T.eq(ex.menuBToRun(battle(true, { tutorial = true }), true), 2,
+    "the Gold tutorial battle is untouched")
+  T.eq(ex.menuBToRun(battle(true, { contest = true }), true), 2,
+    "the Gold contest menu is untouched")
+
   -- a missing battle is a no-op
   T.eq(ex.menuBToRun(nil, true), nil, "a missing battle is a no-op")
+end
+
+-- ------------------------------------------------ TURN AWAY (NURSE)
+
+do
+  local player = { facing = "up" }
+  T.eq(ex.turnAround(player), "down", "facing up flips to down")
+  T.eq(player.facing, "down", "the player's facing is rewritten")
+  T.eq(ex.turnAround({ facing = "down" }), "up", "facing down flips to up")
+  T.eq(ex.turnAround({ facing = "left" }), "right", "facing left flips to right")
+  T.eq(ex.turnAround({ facing = "right" }), "left", "facing right flips to left")
+  T.eq(ex.turnAround(nil), nil, "no player is a no-op")
+  T.eq(ex.turnAround({}), nil, "no facing is a no-op")
+  T.eq(ex.turnAround({ facing = "north" }), "down",
+    "an unknown facing falls back to down")
+end
+
+do
+  -- Gen 1: the turn rides finishNurseHeal's farewell callback.  The suite
+  -- emits game.ready once after the Gen 1 load (the HEAL ON MAP CHANGE
+  -- install), which also installs this wrap; the overworld dialogue itself
+  -- needs a booted game (its Game upvalue is set in OverworldState:enter),
+  -- so the callback the wrap installs is driven through the pure
+  -- afterNurseHeal export instead.
+  local OW = require("src.world.OverworldController")
+  T.neq(OW._qolTogglesTurnAwayInstalled, nil,
+    "the nurse wrap installs on game.ready")
+  T.eq(type(OW.finishNurseHeal), "function",
+    "finishNurseHeal stays callable")
+  Runtime.emit("game.ready", { game = Game })
+  T.eq(type(OW.finishNurseHeal), "function",
+    "a second game.ready is a guarded no-op")
+
+  local player = { facing = "up" }
+  local done = 0
+  bucket.turn_away_nurse = true
+  local callback = ex.afterNurseHeal(player, function() done = done + 1 end)
+  callback()
+  T.eq(player.facing, "down", "the player turns away after the heal")
+  T.eq(done, 1, "the original onDone still runs")
+
+  player.facing = "up"
+  bucket.turn_away_nurse = false
+  callback = ex.afterNurseHeal(player, function() done = done + 1 end)
+  callback()
+  T.eq(player.facing, "up", "toggle OFF leaves the player facing the nurse")
+  T.eq(done, 2, "the original onDone runs regardless")
+  bucket.turn_away_nurse = nil
 end
 
 -- ------------------------------------------------ HEAL ON MAP CHANGE
@@ -1521,7 +1675,8 @@ for _, spec in ipairs({ -- the ids are stable, from the TOGGLES list
   "forgettable_hms", "always_catch", "perfect_dvs", "exp_mult",
   "catch_exp", "instant_flee", "remember_cursor", "heal_map_change",
   "quick_ssanne", "last_item", "free_great_ball", "mouse_cam_lock",
-  "no_enc_dupes", "instant_fish", "heal_battle", "auto_repel",
+  "no_enc_dupes", "instant_fish", "heal_battle", "turn_away_nurse",
+  "auto_repel",
   "bulk_mart", "bulk_coins", "lights_on", "remember_move", "keep_money",
   "auto_cut", "run_hold_b",
   "auto_battler", "map_location",

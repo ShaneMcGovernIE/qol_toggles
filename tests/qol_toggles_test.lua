@@ -64,8 +64,16 @@ do
   T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
   T.eq(shown["map_location"], true, "gen 2 keeps MAP LOCATION")
   T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
+  T.eq(ex2.visibleCount(true), #rows,
+    "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
     "gen 2 enabled count matches the shown rows")
+
+  local species = next(fresh.pokemon)
+  local g2mon = { species = species, level = 10, statExp = {} }
+  local g2stats = ex2.perfectDVs(g2mon, fresh)
+  T.eq(g2mon.maxHp, g2stats.hp,
+    "gen 2 perfect DVs refresh the mon's max HP")
 
   -- CATCH GIVES EXP (Gold): the gen 2 engine's Catching.attempt never
   -- receives a battle, so Battle:caught -- the only site that consults
@@ -1636,6 +1644,18 @@ T.eq(tf.x, 16, "ticker starts at the label's x")
 T.eq(tf.w, 136, "ticker clips at the inner right edge (152-16)")
 T.check(tf.overflow > 0, "overflow is the pixels past the window")
 
+do
+  local drawn = {}
+  local fakeFont = {
+    encode = function() return { 1, 2, 3 } end,
+    advanceOf = function() return 8 end,
+    drawCode = function(code) drawn[#drawn + 1] = code end,
+  }
+  ex.drawTickerLabel(fakeFont, "ignored", 4, 16, 0, 16)
+  T.eq(#drawn, 1, "ticker omits glyphs that would cross the right edge")
+  T.eq(drawn[1], 1, "ticker keeps the fully contained glyph")
+end
+
 -- exactly the long labels overflow their window: HEAL ON MAP CHANGE and
 -- NO ENCOUNTER DUPES are 18 glyphs = 144px > 136, so they tick live;
 -- every other label fits
@@ -1745,14 +1765,25 @@ T.eq(vo(5, nil), 0, "nil overflow never scrolls")
 -- the scissor is clipped to the body box interior and cleared after
 local scissorCalls = {}
 local savedScissor = love.graphics.setScissor
+local Font = require("src.render.Font")
+local savedFontDraw = Font.draw
+local bodyYs = {}
 love.graphics.setScissor = function(x, y, w, h)
   scissorCalls[#scissorCalls + 1] = { x = x, y = y, w = w, h = h }
+end
+Font.draw = function(text, x, y)
+  if x == 16 and y >= 32 and y < 104 then bodyYs[#bodyYs + 1] = y end
+  return savedFontDraw(text, x, y)
 end
 local tallHelp = "line one\nline two\nline three\nline four\n"
   .. "line five\nline six\nline seven\nline eight\nline nine"
 helpMenu.helpRow = { label = "TALL", help = tallHelp }
 helpMenu.helpTick = 2 -- mid-scroll (1.6s hold is over)
+local savedRows = helpMenu.rows
+helpMenu.rows = {}
 helpMenu:draw()
+helpMenu.rows = savedRows
+Font.draw = savedFontDraw
 love.graphics.setScissor = savedScissor
 T.eq(#scissorCalls, 2, "the scroll path scissored and cleared")
 T.eq(scissorCalls[1].x, 16, "scissor starts at the body text x")
@@ -1760,6 +1791,7 @@ T.eq(scissorCalls[1].y, 40, "scissor starts at the body text y")
 T.eq(scissorCalls[1].w, 136, "scissor is one text column wide")
 T.eq(scissorCalls[1].h, 56, "scissor is the seven-row body")
 T.eq(scissorCalls[2].x, nil, "scissor was cleared")
+T.check(bodyYs[1] < 40, "over-long help text scrolls upward inside the box")
 pressed.b = true
 helpMenu:update(1 / 60)
 pressed.b = nil

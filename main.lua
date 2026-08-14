@@ -149,17 +149,17 @@ end
 -- push/translate/scale), so on Gen 2 where the GB canvas draws under a
 -- fit-scale transform a window-space scissor of the GB-size window clips the
 -- scaled label almost entirely away -- the ticker row ends up blank.
--- Clipping by glyph in GB coordinates is exact (Font.advanceOf for any
--- page's advance): only glyphs whose left edge lands inside
--- [x, x + w] are drawn.  `label` is the raw text; `off` is the ticker's
--- horizontal offset in GB pixels (tickerOffset's return).
+-- Clipping by glyph in GB coordinates avoids right-edge bleed: only glyphs
+-- fully contained in [x, x + w] are drawn.  `label` is the raw text; `off`
+-- is the ticker's horizontal offset in GB pixels (tickerOffset's return).
 local function drawTickerLabel(Font, label, off, x, y, w)
   local pen = x + off
   for _, code in ipairs(Font.encode(label)) do
-    if pen >= x and pen < x + w then
+    local advance = Font.advanceOf(code)
+    if pen >= x and pen + advance <= x + w then
       Font.drawCode(code, pen, y)
     end
-    pen = pen + Font.advanceOf(code)
+    pen = pen + advance
   end
 end
 
@@ -560,6 +560,15 @@ return function(mod)
     local n = 0
     for _, spec in ipairs(TOGGLES) do
       if not (gen2 and spec.gen1) and getFn(spec.key) then n = n + 1 end
+    end
+    return n
+  end
+
+  mod.exports.visibleCount = function(gen2)
+    gen2 = gen2 == nil and GEN2 or gen2
+    local n = 0
+    for _, spec in ipairs(TOGGLES) do
+      if not (gen2 and spec.gen1) then n = n + 1 end
     end
     return n
   end
@@ -1450,6 +1459,7 @@ return function(mod)
       if GEN2 then
         mon.stats = require("src.battle.gen2.Mon").stats(def, mon.dvs,
                                                           mon.level, mon.statExp)
+        mon.maxHp = mon.stats and mon.stats.hp or mon.maxHp
       else
         mon.stats = require("src.pokemon.Stats").calc(def, mon.level,
                                                       mon.dvs, mon.statExp)
@@ -1962,7 +1972,8 @@ return function(mod)
       id = "qolToggles",
       label = Strings("QOL TOGGLES"),
       value = function()
-        return Strings("%d/%d ON", mod.exports.enabledCount(get), #TOGGLES)
+        return Strings("%d/%d ON", mod.exports.enabledCount(get),
+                       mod.exports.visibleCount())
       end,
       activate = function(g)
         require("src.ui.Screens").push(g, "QolTogglesMenu")
@@ -2072,7 +2083,7 @@ return function(mod)
       local overflow = (#lines - 7) * 8
       local dy = 0
       if overflow > 0 then
-        dy = -vertOffset(self.helpTick or 0, overflow)
+        dy = vertOffset(self.helpTick or 0, overflow)
         local g = love.graphics
         if g and g.setScissor then g.setScissor(16, 40, 136, 56) end
       end
@@ -2550,20 +2561,19 @@ return function(mod)
         Player2.tryMove = function(self, dir, map, entities)
           local result = vanillaTryMove(self, dir, map, entities)
           if result == "blocked" and get("auto_cut") then
-            local World = require("src.world.gen2.World")
             local save = Game.save
             if save and save.party then
-              local def = self.cellX and require("src.world.gen2.FieldMoves")
-              if def and def.tryCutOW then
-                local ok, out = pcall(def.tryCutOW, {
-                  save = save, party = save.party, data = Game.data,
-                  player = self, map = map, mapId = map and map.id,
-                })
-                if ok and out and out.ok and out.action == "cut" then
-                  local top = Game.stack
-                    and Game.stack.states and Game.stack.states[#Game.stack.states]
-                  if top and top.tryCutOW then top:tryCutOW() end
-                  return nil
+              local FieldMoves = self.cellX
+                and require("src.world.gen2.FieldMoves")
+              local world = Game.overworld
+              if FieldMoves and FieldMoves.tryCutOW and world
+                  and world.fieldContext and world.tryCutOW then
+                local contextOk, context = pcall(world.fieldContext, world)
+                if contextOk and context then
+                  local ok, out = pcall(FieldMoves.tryCutOW, context)
+                  if ok and out and out.ok and out.action == "cut" then
+                    if world:tryCutOW() then return nil end
+                  end
                 end
               end
             end

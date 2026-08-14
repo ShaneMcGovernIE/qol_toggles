@@ -1776,6 +1776,71 @@ local helpGame = {
 }
 local helpMenu = run.loader.content.screens:get("QolTogglesMenu").new(helpGame)
 T.eq(helpMenu._qolTogglesMenu, true, "the menu is tagged for the latch gate")
+
+-- card renderer geometry: the submenu paints four 10x7 cards on the first
+-- page, centers the card text, and keeps the page marker at the footer edge
+do
+  local Font = require("src.render.Font")
+  local Theme = require("src.ui.Theme")
+  local boxes, texts, codes = {}, {}, {}
+  local savedBox = Font.drawBox
+  local savedDraw = Font.draw
+  local savedDrawCode = Font.drawCode
+  Font.drawBox = function(x, y, w, h, fill)
+    boxes[#boxes + 1] = { x = x, y = y, w = w, h = h }
+    return savedBox(x, y, w, h, fill)
+  end
+  Font.draw = function(text, x, y)
+    texts[#texts + 1] = { text = text, x = x, y = y }
+    return savedDraw(text, x, y)
+  end
+  Font.drawCode = function(code, x, y)
+    codes[#codes + 1] = { code = code, x = x, y = y }
+    return savedDrawCode(code, x, y)
+  end
+  helpMenu.index = 1
+  helpMenu.helpRow = nil
+  helpMenu:draw()
+  Font.drawBox = savedBox
+  Font.draw = savedDraw
+  Font.drawCode = savedDrawCode
+
+  T.eq(#boxes, 4, "first page draws four cards")
+  T.same(boxes[1], { x = 0, y = 0, w = 10, h = 7 },
+         "top-left card is 10x7")
+  T.same(boxes[2], { x = 10, y = 0, w = 10, h = 7 },
+         "top-right card is 10x7")
+  T.same(boxes[3], { x = 0, y = 7, w = 10, h = 7 },
+         "bottom-left card is 10x7")
+  T.same(boxes[4], { x = 10, y = 7, w = 10, h = 7 },
+         "bottom-right card is 10x7")
+  local function hasText(text, x, y)
+    for _, drawn in ipairs(texts) do
+      if drawn.text == text and drawn.x == x and drawn.y == y then
+        return true
+      end
+    end
+    return false
+  end
+  T.check(hasText("POISON", 16, 8),
+          "card label lines are centered in the first card")
+  T.check(hasText("ON", 32, 40),
+          "card values are centered below the first label")
+  local hasCursor, hasMore = false, false
+  for _, drawn in ipairs(codes) do
+    if drawn.code == Theme.cursor and drawn.x == 8 and drawn.y == 8 then
+      hasCursor = true
+    end
+    if drawn.code == Theme.moreArrow and drawn.x == 144 and drawn.y == 128 then
+      hasMore = true
+    end
+  end
+  T.eq(hasCursor, true, "selected card draws the filled cursor")
+  T.eq(hasMore, true, "first page draws the later-page marker")
+  T.check(hasText("CANCEL", 56, 136),
+          "CANCEL is centered on the footer")
+end
+
 ex.requestHelp()
 helpMenu:update(1 / 60)
 T.neq(helpMenu.helpRow, nil, "a help request opens the popup")

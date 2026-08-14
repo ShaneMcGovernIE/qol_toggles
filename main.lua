@@ -391,6 +391,7 @@ return function(mod)
   GEN2 = detectGen2()
   local Strings = require("src.core.Strings")
   local Font = require("src.render.Font")
+  local Theme = require("src.ui.Theme")
 
   -- The submenu renders its rows with the engine's OptionRows viewport on
   -- Gen 1 (four 20x4 boxes, the OPTIONS idiom).  Gold has no OptionRows --
@@ -2049,6 +2050,49 @@ return function(mod)
   QolTogglesMenu.__index = QolTogglesMenu
   QolTogglesMenu.isOpaque = true
 
+  local function drawCardCentered(text, card, y)
+    text = tostring(text or "")
+    local x = card.x * 8
+      + math.floor((card.w * 8 - Font.width(text)) / 2)
+    Font.draw(text, x, y)
+  end
+
+  local function drawCardGrid(game, rows, index)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.rectangle("fill", 0, 0, 160, 144)
+
+    local total = #rows
+    local page = index == total + 1
+      and math.floor(math.max(0, total - 1) / CARD_PAGE_SIZE)
+      or math.floor(math.max(0, index - 1) / CARD_PAGE_SIZE)
+    local first = page * CARD_PAGE_SIZE + 1
+    for slot = 1, CARD_PAGE_SIZE do
+      local row = rows[first + slot - 1]
+      if not row then break end
+      local card = cardGeometry(slot)
+      Font.drawBox(card.x, card.y, card.w, card.h)
+      love.graphics.setColor(0, 0, 0, 1)
+      local lines = row.cardLines or cardLabelLines(row.label)
+      for lineIndex, line in ipairs(lines) do
+        drawCardCentered(line, card, (card.y + lineIndex) * 8)
+      end
+      drawCardCentered(row.value and row.value(game) or "", card,
+                       (card.y + 5) * 8)
+      if index == first + slot - 1 then
+        Font.drawCode(Theme.cursor, (card.x + 1) * 8, (card.y + 1) * 8)
+      end
+    end
+
+    if first + CARD_PAGE_SIZE - 1 < total then
+      love.graphics.setColor(0, 0, 0, 1)
+      Font.drawCode(Theme.moreArrow, 144, 128)
+    end
+    love.graphics.setColor(0, 0, 0, 1)
+    drawCardCentered("CANCEL", { x = 0, w = 20 }, 136)
+    if index == total + 1 then Font.drawCode(Theme.cursor, 8, 136) end
+    love.graphics.setColor(1, 1, 1, 1)
+  end
+
   -- same MEWMON band as OptionsMenu: the submenu owns the SGB screen
   function QolTogglesMenu:sgbPalettes(game)
     return require("src.render.PaletteFX").wholeNamed(game.data, "MEWMON")
@@ -2119,8 +2163,7 @@ return function(mod)
   end
 
   function QolTogglesMenu:draw()
-    OptionRows.draw(self.game, self.rows, self.index, self.scroll or 0,
-                    "CANCEL", #self.rows + 1)
+    drawCardGrid(self.game, self.rows, self.index)
     if self.helpRow then
       -- full-screen popup, the Mods Hotkeys capture idiom: a white pass
       -- first so the underlying rows can never peek through the box seams

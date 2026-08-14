@@ -2093,7 +2093,15 @@ return function(mod)
       love.graphics.setColor(0, 0, 0, 1)
       local lines = row.cardLines or cardLabelLines(row.label)
       for lineIndex, line in ipairs(lines) do
-        drawCardCentered(line, card, (card.y + lineIndex) * 8)
+        local y = (card.y + lineIndex) * 8
+        local ticker = row.cardTickers and row.cardTickers[lineIndex]
+        if ticker then
+          drawTickerLabel(Font, line,
+            tickerOffset(row.tick or 0, ticker.overflow),
+            (card.x + 1) * 8, y, CARD_LABEL_WIDTH)
+        else
+          drawCardCentered(line, card, y)
+        end
       end
       drawCardCentered(row.value and row.value(game) or "", card,
                        (card.y + 5) * 8)
@@ -2128,7 +2136,13 @@ return function(mod)
   function QolTogglesMenu:update(dt)
     -- advance the label tickers (the OptionRows.draw wrap reads row.tick)
     for _, row in ipairs(self.rows or {}) do
-      if row.ticker then row.tick = (row.tick or 0) + (dt or 0) end
+      local hasCardTicker = false
+      for _, ticker in ipairs(row.cardTickers or {}) do
+        if ticker then hasCardTicker = true; break end
+      end
+      if row.ticker or hasCardTicker then
+        row.tick = (row.tick or 0) + (dt or 0)
+      end
     end
     local input = self.game.input
     -- START is read from the normal input edge here rather than from a raw

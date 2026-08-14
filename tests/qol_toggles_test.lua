@@ -1882,6 +1882,10 @@ do
     },
   }
   helpMenu.index = 2 -- CANCEL, so the card itself has no cursor at y=8
+  helpMenu:update(1)
+  T.eq(helpMenu.rows[1].tick, 1,
+       "card ticker rows advance their shared ticker clock")
+  helpMenu.rows[1].tick = 0
   local tickerCodes = {}
   local savedCardDrawCode = Font.drawCode
   Font.drawCode = function(code, x, y)

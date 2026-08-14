@@ -58,7 +58,7 @@ love .
   you left it across turns: use BAG to heal one turn, and the cursor is
   still on BAG the next.  OFF restores the vanilla fresh-FIGHT default
   every turn.
-- **B TO RUN** — press B at the root of the battle menu and the cursor
+- **B FOR QUICK FLEE** — press B at the root of the battle menu and the cursor
   jumps straight to RUN; A then confirms the escape.  (Vanilla B does
   nothing there, so nothing is taken away.)  It never fires in the old
   man's demo battle (Gold's tutorial), a Safari battle (Gold's Bug
@@ -159,6 +159,8 @@ love .
 
 ## Notes
 
+- The QOL TOGGLES submenu shows four switches at a time in a retro 2×2 card
+  grid; use the D-pad to move and A to toggle, while B exits.
 - Each switch is independent and stored with your preferences (options.lua),
   so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
   CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE
@@ -166,10 +168,9 @@ love .
   ON; the rest, including AUTO BATTLER, ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.
-- Toggle labels longer than the row's label window scroll as a ticker
-  (hold at the start, scroll to the end, hold, scroll back), so a future
-  long-named switch stays readable instead of bleeding over the box
-  border.
+- In the 2×2 QOL TOGGLES cards, labels wrap only between whole words. Any
+  individual line wider than the card interior ticker-scrolls in place; shorter
+  lines stay centered.
 - START on a controller (or P on the keyboard) on any toggle row opens a
   full-screen help popup explaining what that toggle does in depth; B (or
   another START/P) closes it, and B still exits the submenu.  A

@@ -64,8 +64,31 @@ do
   T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
   T.eq(shown["map_location"], true, "gen 2 keeps MAP LOCATION")
   T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
+  T.eq(ex2.visibleCount(true), #rows,
+    "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
     "gen 2 enabled count matches the shown rows")
+  T.neq(ex2.cardLabelLines, nil, "gen 2 exposes card label wrapping")
+  if ex2.cardLabelLines then
+    local Font = require("src.render.Font")
+    for _, row in ipairs(rows) do
+      local lines = ex2.cardLabelLines(row.label)
+      T.check(#lines >= 1 and #lines <= 3,
+              "gen 2 card label fits three lines (" .. row.id .. ")")
+      for i, line in ipairs(lines) do
+        T.check(Font.width(line) <= 64
+                  or (row.cardTickers and row.cardTickers[i] ~= nil),
+                "gen 2 card line fits or ticks (" .. row.id .. ": "
+                  .. line .. ")")
+      end
+    end
+  end
+
+  local species = next(fresh.pokemon)
+  local g2mon = { species = species, level = 10, statExp = {} }
+  local g2stats = ex2.perfectDVs(g2mon, fresh)
+  T.eq(g2mon.maxHp, g2stats.hp,
+    "gen 2 perfect DVs refresh the mon's max HP")
 
   -- CATCH GIVES EXP (Gold): the gen 2 engine's Catching.attempt never
   -- receives a battle, so Battle:caught -- the only site that consults
@@ -360,7 +383,8 @@ T.eq(rows[11].id, "exp_mult", "toggle 11: EXP x2")
 T.eq(rows[12].id, "catch_exp", "toggle 12: catch gives EXP")
 T.eq(rows[13].id, "instant_flee", "toggle 13: instant flee")
 T.eq(rows[14].id, "remember_cursor", "toggle 14: remember battle cursor")
-T.eq(rows[15].id, "b_to_run", "toggle 15: B to run")
+T.eq(rows[15].id, "b_to_run", "toggle 15: quick flee")
+T.eq(rows[15].label, "B FOR QUICK FLEE", "toggle 15: quick flee label")
 T.eq(rows[16].id, "heal_map_change", "toggle 16: heal on map change")
 T.eq(rows[17].id, "quick_ssanne", "toggle 17: quick S.S. Anne")
 T.eq(rows[18].id, "last_item", "toggle 18: last item in battle")
@@ -381,6 +405,71 @@ T.eq(rows[32].id, "run_hold_b", "toggle 32: run (hold B)")
 T.eq(rows[33].id, "auto_battler", "toggle 33: Battle Palace auto battler")
 T.eq(rows[34].id, "map_location", "toggle 34: map location toast")
 
+-- ------------------------------------------------ the two-column card grid
+
+T.neq(ex.cardLabelLines, nil, "card label wrapping is exported")
+T.neq(ex.cardGeometry, nil, "card geometry is exported")
+T.neq(ex.gridMove, nil, "card navigation is exported")
+if ex.cardLabelLines and ex.cardGeometry and ex.gridMove then
+  T.same(ex.cardLabelLines("FULL HEAL CATCH"), { "FULL", "HEAL", "CATCH" },
+         "card labels wrap at the card width")
+  T.same(ex.cardGeometry(1), { x = 0, y = 0, w = 10, h = 7 },
+         "top-left card geometry")
+  T.same(ex.cardGeometry(4), { x = 10, y = 7, w = 10, h = 7 },
+         "bottom-right card geometry")
+  T.eq(ex.gridMove(1, "right", 34), 2,
+       "right moves across the top row")
+  T.eq(ex.gridMove(1, "left", 34), 1,
+       "left stops at the left card")
+  T.eq(ex.gridMove(1, "down", 34), 3,
+       "down moves to the bottom row")
+  T.eq(ex.gridMove(3, "down", 34), 5,
+       "down advances to the next page")
+  T.eq(ex.gridMove(33, "down", 34), 35,
+       "last page reaches CANCEL")
+  T.eq(ex.gridMove(35, "up", 34), 34,
+       "CANCEL moves to the final toggle")
+  T.eq(ex.gridMove(35, "down", 34), 1,
+       "CANCEL wraps to the first toggle")
+
+  local Font = require("src.render.Font")
+  for _, row in ipairs(rows) do
+    T.neq(row.cardLines, nil, "row has card label lines (" .. row.id .. ")")
+    if row.cardLines then
+      T.check(#row.cardLines >= 1 and #row.cardLines <= 3,
+              "card label fits three lines (" .. row.id .. ")")
+      for i, line in ipairs(row.cardLines) do
+        T.check(Font.width(line) <= 64
+                  or (row.cardTickers and row.cardTickers[i] ~= nil),
+                "card line fits or ticks (" .. row.id .. ": " .. line .. ")")
+      end
+    end
+  end
+
+  T.same(ex.cardLabelLines("BADGELESS MOVES"),
+         { "BADGELESS", "MOVES" },
+         "card labels keep an overlong word intact")
+  local badgelessRow
+  for _, row in ipairs(rows) do
+    if row.id == "badgeless_moves" then badgelessRow = row end
+  end
+  T.neq(badgelessRow, nil, "BADGELESS MOVES row exists")
+  if badgelessRow then
+    T.neq(badgelessRow.cardTickers, nil,
+          "toggle rows expose per-line card ticker metadata")
+    if badgelessRow.cardTickers then
+      T.eq(badgelessRow.cardLines[1], "BADGELESS",
+           "the long word remains one card line")
+      T.eq(badgelessRow.cardLines[2], "MOVES",
+           "the following word remains its own card line")
+      T.neq(badgelessRow.cardTickers[1], nil,
+            "the overlong card line gets ticker metadata")
+      T.eq(badgelessRow.cardTickers[2], nil,
+           "the fitting card line stays static")
+    end
+  end
+end
+
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")
 T.eq(ex.defaultFor("catch_heal"), true, "FULL HEAL CATCH ships ON")
@@ -396,7 +485,7 @@ T.eq(ex.defaultFor("exp_mult"), false, "EXP x2 ships OFF")
 T.eq(ex.defaultFor("catch_exp"), false, "CATCH GIVES EXP ships OFF")
 T.eq(ex.defaultFor("instant_flee"), false, "INSTANT FLEE ships OFF")
 T.eq(ex.defaultFor("remember_cursor"), true, "REMEMBER CURSOR ships ON")
-T.eq(ex.defaultFor("b_to_run"), false, "B TO RUN ships OFF")
+T.eq(ex.defaultFor("b_to_run"), false, "B FOR QUICK FLEE ships OFF")
 T.eq(ex.defaultFor("heal_map_change"), false, "HEAL ON MAP CHANGE ships OFF")
 T.eq(ex.defaultFor("quick_ssanne"), false, "QUICK S.S. ANNE ships OFF")
 T.eq(ex.defaultFor("last_item"), false, "LAST ITEM (M) ships OFF")
@@ -1186,7 +1275,7 @@ do
   T.eq(battle.menuIndex, 3, "turn_ended leaves the cursor when ON")
 end
 
--- ------------------------------------------------ B TO RUN
+-- ------------------------------------------------ B FOR QUICK FLEE
 
 do
   local function battle(pressedB, over)
@@ -1636,6 +1725,18 @@ T.eq(tf.x, 16, "ticker starts at the label's x")
 T.eq(tf.w, 136, "ticker clips at the inner right edge (152-16)")
 T.check(tf.overflow > 0, "overflow is the pixels past the window")
 
+do
+  local drawn = {}
+  local fakeFont = {
+    encode = function() return { 1, 2, 3 } end,
+    advanceOf = function() return 8 end,
+    drawCode = function(code) drawn[#drawn + 1] = code end,
+  }
+  ex.drawTickerLabel(fakeFont, "ignored", 4, 16, 0, 16)
+  T.eq(#drawn, 1, "ticker omits glyphs that would cross the right edge")
+  T.eq(drawn[1], 1, "ticker keeps the fully contained glyph")
+end
+
 -- exactly the long labels overflow their window: HEAL ON MAP CHANGE and
 -- NO ENCOUNTER DUPES are 18 glyphs = 144px > 136, so they tick live;
 -- every other label fits
@@ -1701,6 +1802,109 @@ local helpGame = {
 }
 local helpMenu = run.loader.content.screens:get("QolTogglesMenu").new(helpGame)
 T.eq(helpMenu._qolTogglesMenu, true, "the menu is tagged for the latch gate")
+
+-- card renderer geometry: the submenu paints four 10x7 cards on the first
+-- page, centers the card text, and keeps the page marker at the footer edge
+do
+  local Font = require("src.render.Font")
+  local Theme = require("src.ui.Theme")
+  local boxes, texts, codes = {}, {}, {}
+  local savedBox = Font.drawBox
+  local savedDraw = Font.draw
+  local savedDrawCode = Font.drawCode
+  Font.drawBox = function(x, y, w, h, fill)
+    boxes[#boxes + 1] = { x = x, y = y, w = w, h = h }
+    return savedBox(x, y, w, h, fill)
+  end
+  Font.draw = function(text, x, y)
+    texts[#texts + 1] = { text = text, x = x, y = y }
+    return savedDraw(text, x, y)
+  end
+  Font.drawCode = function(code, x, y)
+    codes[#codes + 1] = { code = code, x = x, y = y }
+    return savedDrawCode(code, x, y)
+  end
+  helpMenu.index = 1
+  helpMenu.helpRow = nil
+  helpMenu:draw()
+  Font.drawBox = savedBox
+  Font.draw = savedDraw
+  Font.drawCode = savedDrawCode
+
+  T.eq(#boxes, 4, "first page draws four cards")
+  T.same(boxes[1], { x = 0, y = 0, w = 10, h = 7 },
+         "top-left card is 10x7")
+  T.same(boxes[2], { x = 10, y = 0, w = 10, h = 7 },
+         "top-right card is 10x7")
+  T.same(boxes[3], { x = 0, y = 7, w = 10, h = 7 },
+         "bottom-left card is 10x7")
+  T.same(boxes[4], { x = 10, y = 7, w = 10, h = 7 },
+         "bottom-right card is 10x7")
+  local function hasText(text, x, y)
+    for _, drawn in ipairs(texts) do
+      if drawn.text == text and drawn.x == x and drawn.y == y then
+        return true
+      end
+    end
+    return false
+  end
+  T.check(hasText("POISON", 16, 8),
+          "card label lines are centered in the first card")
+  T.check(hasText("ON", 32, 40),
+          "card values are centered below the first label")
+  local hasCursor, hasMore = false, false
+  for _, drawn in ipairs(codes) do
+    if drawn.code == Theme.cursor and drawn.x == 8 and drawn.y == 8 then
+      hasCursor = true
+    end
+    if drawn.code == Theme.moreArrow and drawn.x == 144 and drawn.y == 128 then
+      hasMore = true
+    end
+  end
+  T.eq(hasCursor, true, "selected card draws the filled cursor")
+  T.eq(hasMore, true, "first page draws the later-page marker")
+  T.check(hasText("CANCEL", 56, 136),
+          "CANCEL is centered on the footer")
+end
+
+-- an overflowing card line uses the card-local ticker window, not centered
+-- text that can bleed through the border
+do
+  local Font = require("src.render.Font")
+  local savedCardRows = helpMenu.rows
+  helpMenu.rows = {
+    {
+      label = "BADGELESS MOVES",
+      cardLines = { "BADGELESS", "MOVES" },
+      cardTickers = { { overflow = 8 }, nil },
+      tick = 0,
+      value = function() return "OFF" end,
+    },
+  }
+  helpMenu.index = 2 -- CANCEL, so the card itself has no cursor at y=8
+  helpMenu:update(1)
+  T.eq(helpMenu.rows[1].tick, 1,
+       "card ticker rows advance their shared ticker clock")
+  helpMenu.rows[1].tick = 0
+  local tickerCodes = {}
+  local savedCardDrawCode = Font.drawCode
+  Font.drawCode = function(code, x, y)
+    if y == 8 and x > 0 and x < 72 then
+      tickerCodes[#tickerCodes + 1] = { code = code, x = x, y = y }
+    end
+    return savedCardDrawCode(code, x, y)
+  end
+  helpMenu:draw()
+  Font.drawCode = savedCardDrawCode
+  helpMenu.rows = savedCardRows
+  helpMenu.index = 1
+  T.eq(#tickerCodes, 8, "the long card line draws eight clipped glyphs")
+  for _, drawn in ipairs(tickerCodes) do
+    T.check(drawn.x >= 8 and drawn.x + 8 <= 72,
+            "card ticker glyph stays inside the card interior")
+  end
+end
+
 ex.requestHelp()
 helpMenu:update(1 / 60)
 T.neq(helpMenu.helpRow, nil, "a help request opens the popup")
@@ -1724,6 +1928,76 @@ helpMenu:update(1 / 60)
 T.eq(helpMenu.helpRow, nil, "B closes the popup")
 pressed.b = nil
 
+-- ------- two-column card navigation and activation
+
+local savedPop = helpGame.stack.pop
+local exitCalls = 0
+helpGame.stack.pop = function() exitCalls = exitCalls + 1 end
+helpMenu.index = 1
+local firstBefore = helpMenu.rows[1].value()
+pressed.right = true
+helpMenu:update(1 / 60)
+pressed.right = nil
+T.eq(helpMenu.index, 2, "right selects the second card")
+local secondBefore = helpMenu.rows[2].value()
+pressed.a = true
+helpMenu:update(1 / 60)
+pressed.a = nil
+T.neq(helpMenu.rows[2].value(), secondBefore, "A toggles the selected card")
+helpMenu.rows[2].step() -- restore the setting changed by the test
+
+pressed.left = true
+helpMenu:update(1 / 60)
+pressed.left = nil
+T.eq(helpMenu.index, 1, "left selects the first card")
+T.eq(helpMenu.rows[1].value(), firstBefore,
+     "directional navigation does not toggle the card")
+
+helpMenu.index = 1
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, 3, "down moves to the bottom row")
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, 5, "down advances to the next page")
+
+helpMenu.index = 33
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, #helpMenu.rows + 1,
+     "down from the partial final page selects CANCEL")
+pressed.up = true
+helpMenu:update(1 / 60)
+pressed.up = nil
+T.eq(helpMenu.index, #helpMenu.rows,
+     "up from CANCEL selects the final toggle")
+helpMenu.index = #helpMenu.rows + 1
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, 1, "down from CANCEL wraps to the first card")
+
+helpMenu.index = 2
+ex.requestHelp()
+helpMenu:update(1 / 60)
+T.eq(helpMenu.helpRow.id, "catch_heal",
+     "help follows the selected card")
+pressed.b = true
+helpMenu:update(1 / 60)
+pressed.b = nil
+T.eq(helpMenu.helpRow, nil, "B closes the moved-card popup")
+
+helpMenu.index = #helpMenu.rows + 1
+pressed.a = true
+helpMenu:update(1 / 60)
+pressed.a = nil
+T.eq(exitCalls, 1, "A on CANCEL exits the submenu")
+helpMenu.index = 1
+helpGame.stack.pop = savedPop
+
 -- ------- the slow vertical scroll for over-long descriptions
 
 -- pure offset math: same hold/scroll/hold/scroll-back shape as the label
@@ -1745,14 +2019,25 @@ T.eq(vo(5, nil), 0, "nil overflow never scrolls")
 -- the scissor is clipped to the body box interior and cleared after
 local scissorCalls = {}
 local savedScissor = love.graphics.setScissor
+local Font = require("src.render.Font")
+local savedFontDraw = Font.draw
+local bodyYs = {}
 love.graphics.setScissor = function(x, y, w, h)
   scissorCalls[#scissorCalls + 1] = { x = x, y = y, w = w, h = h }
+end
+Font.draw = function(text, x, y)
+  if x == 16 and y >= 32 and y < 104 then bodyYs[#bodyYs + 1] = y end
+  return savedFontDraw(text, x, y)
 end
 local tallHelp = "line one\nline two\nline three\nline four\n"
   .. "line five\nline six\nline seven\nline eight\nline nine"
 helpMenu.helpRow = { label = "TALL", help = tallHelp }
 helpMenu.helpTick = 2 -- mid-scroll (1.6s hold is over)
+local savedRows = helpMenu.rows
+helpMenu.rows = {}
 helpMenu:draw()
+helpMenu.rows = savedRows
+Font.draw = savedFontDraw
 love.graphics.setScissor = savedScissor
 T.eq(#scissorCalls, 2, "the scroll path scissored and cleared")
 T.eq(scissorCalls[1].x, 16, "scissor starts at the body text x")
@@ -1760,6 +2045,7 @@ T.eq(scissorCalls[1].y, 40, "scissor starts at the body text y")
 T.eq(scissorCalls[1].w, 136, "scissor is one text column wide")
 T.eq(scissorCalls[1].h, 56, "scissor is the seven-row body")
 T.eq(scissorCalls[2].x, nil, "scissor was cleared")
+T.check(bodyYs[1] < 40, "over-long help text scrolls upward inside the box")
 pressed.b = true
 helpMenu:update(1 / 60)
 pressed.b = nil

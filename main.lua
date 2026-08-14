@@ -26,7 +26,7 @@
 --   INSTANT FLEE     wild battles always escape on the first try
 --   REMEMBER CURSOR  the battle FIGHT/BAG/PKMN/RUN cursor stays where it
 --                    was last turn; OFF restores the fresh-FIGHT default
---   B TO RUN         press B at the root of the battle menu to move the
+--   B FOR QUICK FLEE press B at the root of the battle menu to move the
 --                    cursor to RUN (A still confirms the escape)
 --   LAST ITEM (M)    in battle, M uses the last item used from the bag:
 --                    balls throw at the foe, healing asks which mon
@@ -129,6 +129,54 @@ local function vertOffset(t, overflow)
   return scrollOffset(t, overflow, VERT_HOLD, VERT_SPEED)
 end
 
+-- The QoL submenu uses four 10x7 cards on the 160x144 Game Boy canvas.
+-- Labels get eight interior glyph columns; the remaining two columns are the
+-- card border and its one-glyph padding on either side.
+local CARD_COLUMNS = 2
+local CARD_PAGE_SIZE = 4
+local CARD_WIDTH = 10
+local CARD_HEIGHT = 7
+local CARD_LABEL_COLUMNS = CARD_WIDTH - 2
+local CARD_LABEL_WIDTH = CARD_LABEL_COLUMNS * 8
+
+local function cardGeometry(slot)
+  local col = (slot - 1) % CARD_COLUMNS
+  local row = math.floor((slot - 1) / CARD_COLUMNS)
+  return {
+    x = col * CARD_WIDTH,
+    y = row * CARD_HEIGHT,
+    w = CARD_WIDTH,
+    h = CARD_HEIGHT,
+  }
+end
+
+-- Absolute row navigation for the two-column pages.  `total + 1` is the
+-- centered CANCEL footer.  Moving by two preserves the column while moving
+-- between the top and bottom rows, including across page boundaries.
+local function gridMove(index, action, total)
+  total = math.max(0, tonumber(total) or 0)
+  local cancel = total + 1
+  index = tonumber(index) or 1
+  if total == 0 then return cancel end
+  if index >= cancel then
+    if action == "up" then return total end
+    if action == "down" then return 1 end
+    return cancel
+  end
+  if index < 1 then index = 1 end
+  if action == "left" then
+    return (index - 1) % CARD_COLUMNS == 1 and index - 1 or index
+  elseif action == "right" then
+    return (index - 1) % CARD_COLUMNS == 0 and index < total
+           and index + 1 or index
+  elseif action == "up" then
+    return index > CARD_COLUMNS and index - CARD_COLUMNS or cancel
+  elseif action == "down" then
+    return index + CARD_COLUMNS <= total and index + CARD_COLUMNS or cancel
+  end
+  return index
+end
+
 -- Label geometry for OptionRows rows: labels start at x=16 (OptionRows.draw)
 -- and the engine's text convention pads 8px inside the box, so a label
 -- clips at the inner right edge 152.  The GB font is a flat 8px/glyph, so
@@ -149,17 +197,17 @@ end
 -- push/translate/scale), so on Gen 2 where the GB canvas draws under a
 -- fit-scale transform a window-space scissor of the GB-size window clips the
 -- scaled label almost entirely away -- the ticker row ends up blank.
--- Clipping by glyph in GB coordinates is exact (Font.advanceOf for any
--- page's advance): only glyphs whose left edge lands inside
--- [x, x + w] are drawn.  `label` is the raw text; `off` is the ticker's
--- horizontal offset in GB pixels (tickerOffset's return).
+-- Clipping by glyph in GB coordinates avoids right-edge bleed: only glyphs
+-- fully contained in [x, x + w] are drawn.  `label` is the raw text; `off`
+-- is the ticker's horizontal offset in GB pixels (tickerOffset's return).
 local function drawTickerLabel(Font, label, off, x, y, w)
   local pen = x + off
   for _, code in ipairs(Font.encode(label)) do
-    if pen >= x and pen < x + w then
+    local advance = Font.advanceOf(code)
+    if pen >= x and pen + advance <= x + w then
       Font.drawCode(code, pen, y)
     end
-    pen = pen + Font.advanceOf(code)
+    pen = pen + advance
   end
 end
 
@@ -257,7 +305,7 @@ local TOGGLES = {
     help = "Wild battles\nalways escape on\nthe first try,\nfrom the RUN menu\nand the faint\ndialogue both." },
   { key = "remember_cursor", label = "REMEMBER CURSOR", default = true,
     help = "The battle menu\ncursor stays\nwhere you left it\nacross turns.\vOFF restores\nthe fresh FIGHT\ndefault each turn" },
-  { key = "b_to_run", label = "B TO RUN", default = false,
+  { key = "b_to_run", label = "B FOR QUICK FLEE", default = false,
     help = "Press B at the\nroot of the\nbattle menu to\nmove the cursor\nto RUN.\vA then confirms\nthe escape." },
   { key = "heal_map_change", label = "HEAL ON MAP CHANGE", default = false,
     help = "Every map change\nfully heals the\nparty: HP, status\nand all PP." },
@@ -344,6 +392,7 @@ return function(mod)
   GEN2 = detectGen2()
   local Strings = require("src.core.Strings")
   local Font = require("src.render.Font")
+  local Theme = require("src.ui.Theme")
 
   -- The submenu renders its rows with the engine's OptionRows viewport on
   -- Gen 1 (four 20x4 boxes, the OPTIONS idiom).  Gold has no OptionRows --
@@ -398,6 +447,32 @@ return function(mod)
     -- (the wrap_compose_test).  The name is built at runtime so gen2check
     -- does not flag a Gen 1-only module that never loads under Gold.
     OptionRows = require("src" .. ".ui.OptionRows")
+  end
+
+  local function cardLabelLines(label)
+    label = tostring(label or "")
+    if label == "" then return { "" } end
+    local lines, current = {}, nil
+    for word in label:gmatch("%S+") do
+      local candidate = current and (current .. " " .. word) or word
+      if current and Font.width(candidate) > CARD_LABEL_WIDTH then
+        lines[#lines + 1] = current
+        current = word
+      else
+        current = candidate
+      end
+    end
+    if current then lines[#lines + 1] = current end
+    return lines
+  end
+
+  local function cardLineTickers(lines)
+    local tickers = {}
+    for i, line in ipairs(lines) do
+      local overflow = Font.width(line) - CARD_LABEL_WIDTH
+      if overflow > 0 then tickers[i] = { overflow = overflow } end
+    end
+    return tickers
   end
 
   -- Toggles ride options.lua's per-mod bucket (the same store the mod
@@ -532,9 +607,12 @@ return function(mod)
         -- a Gen 2 boot cannot run a Gen 1-cart mechanic; skip the row
       else
         local label = Strings(spec.label)
+        local cardLines = cardLabelLines(label)
         local row = {
           id = spec.key,
           label = label,
+          cardLines = cardLines,
+          cardTickers = cardLineTickers(cardLines),
           help = spec.help,
           value = function()
             return getFn(spec.key) and Strings("ON") or Strings("OFF")
@@ -564,10 +642,22 @@ return function(mod)
     return n
   end
 
+  mod.exports.visibleCount = function(gen2)
+    gen2 = gen2 == nil and GEN2 or gen2
+    local n = 0
+    for _, spec in ipairs(TOGGLES) do
+      if not (gen2 and spec.gen1) then n = n + 1 end
+    end
+    return n
+  end
+
   mod.exports.tickerOffset = tickerOffset
   mod.exports.vertOffset = vertOffset
   mod.exports.tickerFor = tickerFor
   mod.exports.drawTickerLabel = drawTickerLabel
+  mod.exports.cardLabelLines = cardLabelLines
+  mod.exports.cardGeometry = cardGeometry
+  mod.exports.gridMove = gridMove
 
   -- the in-depth help for a toggle id (START / P on its row), or nil for
   -- an unknown id; the rows carry it so the menu never re-looks it up
@@ -1450,6 +1540,7 @@ return function(mod)
       if GEN2 then
         mon.stats = require("src.battle.gen2.Mon").stats(def, mon.dvs,
                                                           mon.level, mon.statExp)
+        mon.maxHp = mon.stats and mon.stats.hp or mon.maxHp
       else
         mon.stats = require("src.pokemon.Stats").calc(def, mon.level,
                                                       mon.dvs, mon.statExp)
@@ -1670,7 +1761,7 @@ return function(mod)
     return battle and battle.menuIndex or nil
   end
 
-  -- B TO RUN: at the root of the battle menu (phase "menu"), a B press
+  -- B FOR QUICK FLEE: at the root of the battle menu (phase "menu"), a B press
   -- parks the cursor on RUN.  Neither engine has a B branch at the menu
   -- root (B only backs out of move select), so intercepting it is
   -- collision free.  Gen 1's demo (old man) and Safari battles use
@@ -1962,7 +2053,8 @@ return function(mod)
       id = "qolToggles",
       label = Strings("QOL TOGGLES"),
       value = function()
-        return Strings("%d/%d ON", mod.exports.enabledCount(get), #TOGGLES)
+        return Strings("%d/%d ON", mod.exports.enabledCount(get),
+                       mod.exports.visibleCount())
       end,
       activate = function(g)
         require("src.ui.Screens").push(g, "QolTogglesMenu")
@@ -1976,6 +2068,57 @@ return function(mod)
   local QolTogglesMenu = {}
   QolTogglesMenu.__index = QolTogglesMenu
   QolTogglesMenu.isOpaque = true
+
+  local function drawCardCentered(text, card, y)
+    text = tostring(text or "")
+    local x = card.x * 8
+      + math.floor((card.w * 8 - Font.width(text)) / 2)
+    Font.draw(text, x, y)
+  end
+
+  local function drawCardGrid(game, rows, index)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.rectangle("fill", 0, 0, 160, 144)
+
+    local total = #rows
+    local page = index == total + 1
+      and math.floor(math.max(0, total - 1) / CARD_PAGE_SIZE)
+      or math.floor(math.max(0, index - 1) / CARD_PAGE_SIZE)
+    local first = page * CARD_PAGE_SIZE + 1
+    for slot = 1, CARD_PAGE_SIZE do
+      local row = rows[first + slot - 1]
+      if not row then break end
+      local card = cardGeometry(slot)
+      Font.drawBox(card.x, card.y, card.w, card.h)
+      love.graphics.setColor(0, 0, 0, 1)
+      local lines = row.cardLines or cardLabelLines(row.label)
+      for lineIndex, line in ipairs(lines) do
+        local y = (card.y + lineIndex) * 8
+        local ticker = row.cardTickers and row.cardTickers[lineIndex]
+        if ticker then
+          drawTickerLabel(Font, line,
+            tickerOffset(row.tick or 0, ticker.overflow),
+            (card.x + 1) * 8, y, CARD_LABEL_WIDTH)
+        else
+          drawCardCentered(line, card, y)
+        end
+      end
+      drawCardCentered(row.value and row.value(game) or "", card,
+                       (card.y + 5) * 8)
+      if index == first + slot - 1 then
+        Font.drawCode(Theme.cursor, (card.x + 1) * 8, (card.y + 1) * 8)
+      end
+    end
+
+    if first + CARD_PAGE_SIZE - 1 < total then
+      love.graphics.setColor(0, 0, 0, 1)
+      Font.drawCode(Theme.moreArrow, 144, 128)
+    end
+    love.graphics.setColor(0, 0, 0, 1)
+    drawCardCentered("CANCEL", { x = 0, w = 20 }, 136)
+    if index == total + 1 then Font.drawCode(Theme.cursor, 8, 136) end
+    love.graphics.setColor(1, 1, 1, 1)
+  end
 
   -- same MEWMON band as OptionsMenu: the submenu owns the SGB screen
   function QolTogglesMenu:sgbPalettes(game)
@@ -1993,7 +2136,13 @@ return function(mod)
   function QolTogglesMenu:update(dt)
     -- advance the label tickers (the OptionRows.draw wrap reads row.tick)
     for _, row in ipairs(self.rows or {}) do
-      if row.ticker then row.tick = (row.tick or 0) + (dt or 0) end
+      local hasCardTicker = false
+      for _, ticker in ipairs(row.cardTickers or {}) do
+        if ticker then hasCardTicker = true; break end
+      end
+      if row.ticker or hasCardTicker then
+        row.tick = (row.tick or 0) + (dt or 0)
+      end
     end
     local input = self.game.input
     -- START is read from the normal input edge here rather than from a raw
@@ -2025,30 +2174,32 @@ return function(mod)
       end
     end
     local rows = self.rows
-    local cancelRow = #rows + 1
+    local action
     if input:wasPressed("up") then
-      self.index = self.index > 1 and self.index - 1 or cancelRow
+      action = "up"
     elseif input:wasPressed("down") then
-      self.index = self.index < cancelRow and self.index + 1 or 1
-    elseif input:wasPressed("left") or input:wasPressed("right")
-        or input:wasPressed("a") then
-      local dir = input:wasPressed("left") and -1 or 1
+      action = "down"
+    elseif input:wasPressed("left") then
+      action = "left"
+    elseif input:wasPressed("right") then
+      action = "right"
+    end
+    if action then
+      self.index = gridMove(self.index, action, #rows)
+    elseif input:wasPressed("a") then
       local row = rows[self.index]
       if row and row.step then
-        row.step(self.game, dir)
-      elseif input:wasPressed("a") then -- CANCEL
+        row.step(self.game)
+      else -- CANCEL
         self:exit()
       end
-    elseif input:wasPressed("b") or input:wasPressed("start") then
+    elseif input:wasPressed("b") then
       self:exit()
     end
-    self.scroll = OptionRows.clampScroll(self.index, self.scroll or 0,
-                                         #rows, cancelRow)
   end
 
   function QolTogglesMenu:draw()
-    OptionRows.draw(self.game, self.rows, self.index, self.scroll or 0,
-                    "CANCEL", #self.rows + 1)
+    drawCardGrid(self.game, self.rows, self.index)
     if self.helpRow then
       -- full-screen popup, the Mods Hotkeys capture idiom: a white pass
       -- first so the underlying rows can never peek through the box seams
@@ -2072,7 +2223,7 @@ return function(mod)
       local overflow = (#lines - 7) * 8
       local dy = 0
       if overflow > 0 then
-        dy = -vertOffset(self.helpTick or 0, overflow)
+        dy = vertOffset(self.helpTick or 0, overflow)
         local g = love.graphics
         if g and g.setScissor then g.setScissor(16, 40, 136, 56) end
       end
@@ -2199,7 +2350,7 @@ return function(mod)
     end
   end
 
-  -- B TO RUN: park the battle menu cursor on RUN when B is pressed at the
+  -- B FOR QUICK FLEE: park the battle menu cursor on RUN when B is pressed at the
   -- menu root.  Vanilla Gen 1 has no B branch in phase "menu" (B only
   -- backs out of move select), so this wrap runs the cursor move before
   -- the vanilla menu input handler and never fights an existing action.
@@ -2550,20 +2701,19 @@ return function(mod)
         Player2.tryMove = function(self, dir, map, entities)
           local result = vanillaTryMove(self, dir, map, entities)
           if result == "blocked" and get("auto_cut") then
-            local World = require("src.world.gen2.World")
             local save = Game.save
             if save and save.party then
-              local def = self.cellX and require("src.world.gen2.FieldMoves")
-              if def and def.tryCutOW then
-                local ok, out = pcall(def.tryCutOW, {
-                  save = save, party = save.party, data = Game.data,
-                  player = self, map = map, mapId = map and map.id,
-                })
-                if ok and out and out.ok and out.action == "cut" then
-                  local top = Game.stack
-                    and Game.stack.states and Game.stack.states[#Game.stack.states]
-                  if top and top.tryCutOW then top:tryCutOW() end
-                  return nil
+              local FieldMoves = self.cellX
+                and require("src.world.gen2.FieldMoves")
+              local world = Game.overworld
+              if FieldMoves and FieldMoves.tryCutOW and world
+                  and world.fieldContext and world.tryCutOW then
+                local contextOk, context = pcall(world.fieldContext, world)
+                if contextOk and context then
+                  local ok, out = pcall(FieldMoves.tryCutOW, context)
+                  if ok and out and out.ok and out.action == "cut" then
+                    if world:tryCutOW() then return nil end
+                  end
                 end
               end
             end

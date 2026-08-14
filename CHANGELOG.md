@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.20.0] - 2026-08-14
+
+### Added
+
+- The QOL TOGGLES menu now uses a paginated 2×2 card layout, showing four
+  switches at a time.
+- The D-pad moves between cards, A toggles the selected switch, B exits, and
+  START or P opens the selected switch's help text.
+
+### Changed
+
+- Long card labels keep whole words together. Individual lines that are too
+  wide now scroll horizontally inside their card instead of splitting words
+  across lines.
+- The battle shortcut is labelled B FOR QUICK FLEE for clarity.
+
 ## [1.19.1] - 2026-08-14
 
 ### Fixed

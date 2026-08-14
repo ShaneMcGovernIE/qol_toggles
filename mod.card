@@ -19,7 +19,7 @@ return {
       "an EXP x2 switch doubles battle EXP",
       "an INSTANT FLEE switch escapes wild battles on the first try",
       "a REMEMBER CURSOR switch keeps the battle FIGHT/BAG/PKMN/RUN cursor where it was left across turns (OFF restores the fresh-FIGHT default each turn)",
-      "a B TO RUN switch moves the battle menu cursor to RUN when B is pressed at the menu root (A still confirms the escape); it never fires in the old man's demo battle, a Safari battle, or while a locked action owns the turn",
+      "a B FOR QUICK FLEE switch moves the battle menu cursor to RUN when B is pressed at the menu root (A still confirms the escape); it never fires in the old man's demo battle, a Safari battle, or while a locked action owns the turn",
       "a HEAL ON MAP CHANGE switch fully heals the party (HP, status, PP) on every map transition",
       "a QUICK S.S. ANNE switch prompts the Vermilion dock sailor for the ticket once, then lets the player pass without dialogue",
       "a LAST ITEM (M) switch makes M in battle use the last item used from the bag",
@@ -47,7 +47,7 @@ return {
     known = {
       "On Gold, the Gen 1-cart-only toggles (QUICK S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M), AUTO BATTLER, POKEBALL BONUS, BULK MART, FORGETTABLE HMs) do not appear in the submenu -- Gold's mart, battle-item and HM-forget APIs have no honest equivalent yet.  The rest behave the same on both generations",
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship ON; the other twenty-four, including AUTO BATTLER, B TO RUN and TURN AWAY (NURSE), ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship ON; the other twenty-four, including AUTO BATTLER, B FOR QUICK FLEE and TURN AWAY (NURSE), ship OFF.  Toggles persist in options.lua, independent of save files",
       "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",
       "AUTO CUT only fires when a party mon knows CUT (FIELD MOVES ALL does not extend to it), and the step is consumed by the cut text + animation",
       "NO ENCOUNTER DUPES is session-scoped, so a restart forgets the last species",

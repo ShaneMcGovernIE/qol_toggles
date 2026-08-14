@@ -368,7 +368,8 @@ T.eq(rows[11].id, "exp_mult", "toggle 11: EXP x2")
 T.eq(rows[12].id, "catch_exp", "toggle 12: catch gives EXP")
 T.eq(rows[13].id, "instant_flee", "toggle 13: instant flee")
 T.eq(rows[14].id, "remember_cursor", "toggle 14: remember battle cursor")
-T.eq(rows[15].id, "b_to_run", "toggle 15: B to run")
+T.eq(rows[15].id, "b_to_run", "toggle 15: quick flee")
+T.eq(rows[15].label, "B FOR QUICK FLEE", "toggle 15: quick flee label")
 T.eq(rows[16].id, "heal_map_change", "toggle 16: heal on map change")
 T.eq(rows[17].id, "quick_ssanne", "toggle 17: quick S.S. Anne")
 T.eq(rows[18].id, "last_item", "toggle 18: last item in battle")
@@ -404,7 +405,7 @@ T.eq(ex.defaultFor("exp_mult"), false, "EXP x2 ships OFF")
 T.eq(ex.defaultFor("catch_exp"), false, "CATCH GIVES EXP ships OFF")
 T.eq(ex.defaultFor("instant_flee"), false, "INSTANT FLEE ships OFF")
 T.eq(ex.defaultFor("remember_cursor"), true, "REMEMBER CURSOR ships ON")
-T.eq(ex.defaultFor("b_to_run"), false, "B TO RUN ships OFF")
+T.eq(ex.defaultFor("b_to_run"), false, "B FOR QUICK FLEE ships OFF")
 T.eq(ex.defaultFor("heal_map_change"), false, "HEAL ON MAP CHANGE ships OFF")
 T.eq(ex.defaultFor("quick_ssanne"), false, "QUICK S.S. ANNE ships OFF")
 T.eq(ex.defaultFor("last_item"), false, "LAST ITEM (M) ships OFF")
@@ -1194,7 +1195,7 @@ do
   T.eq(battle.menuIndex, 3, "turn_ended leaves the cursor when ON")
 end
 
--- ------------------------------------------------ B TO RUN
+-- ------------------------------------------------ B FOR QUICK FLEE
 
 do
   local function battle(pressedB, over)

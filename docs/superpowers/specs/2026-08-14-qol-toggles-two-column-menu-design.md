@@ -46,7 +46,7 @@ The menu keeps an absolute row index for compatibility with the current help and
 - On the first page, up from the top row reaches the footer. On the final page, down from the last populated row reaches `CANCEL`.
 - Up from `CANCEL` returns to the final toggle; down from `CANCEL` wraps to the first toggle.
 - A toggles the selected card.
-- B and START close the menu. The existing keyboard/controller help path still opens the selected row's help popup with P/START.
+- B closes the menu and A on `CANCEL` exits. The existing keyboard/controller help path still opens the selected row's help popup with P/START; while the popup is open, B or START closes it.
 
 This separates navigation from activation: the directional pad chooses a card and A changes its setting.
 

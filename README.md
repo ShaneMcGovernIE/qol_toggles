@@ -159,6 +159,8 @@ love .
 
 ## Notes
 
+- The QOL TOGGLES submenu shows four switches at a time in a retro 2×2 card
+  grid; use the D-pad to move and A to toggle, while B exits.
 - Each switch is independent and stored with your preferences (options.lua),
   so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
   CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE

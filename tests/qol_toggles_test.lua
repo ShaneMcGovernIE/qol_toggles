@@ -1864,6 +1864,76 @@ helpMenu:update(1 / 60)
 T.eq(helpMenu.helpRow, nil, "B closes the popup")
 pressed.b = nil
 
+-- ------- two-column card navigation and activation
+
+local savedPop = helpGame.stack.pop
+local exitCalls = 0
+helpGame.stack.pop = function() exitCalls = exitCalls + 1 end
+helpMenu.index = 1
+local firstBefore = helpMenu.rows[1].value()
+pressed.right = true
+helpMenu:update(1 / 60)
+pressed.right = nil
+T.eq(helpMenu.index, 2, "right selects the second card")
+local secondBefore = helpMenu.rows[2].value()
+pressed.a = true
+helpMenu:update(1 / 60)
+pressed.a = nil
+T.neq(helpMenu.rows[2].value(), secondBefore, "A toggles the selected card")
+helpMenu.rows[2].step() -- restore the setting changed by the test
+
+pressed.left = true
+helpMenu:update(1 / 60)
+pressed.left = nil
+T.eq(helpMenu.index, 1, "left selects the first card")
+T.eq(helpMenu.rows[1].value(), firstBefore,
+     "directional navigation does not toggle the card")
+
+helpMenu.index = 1
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, 3, "down moves to the bottom row")
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, 5, "down advances to the next page")
+
+helpMenu.index = 33
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, #helpMenu.rows + 1,
+     "down from the partial final page selects CANCEL")
+pressed.up = true
+helpMenu:update(1 / 60)
+pressed.up = nil
+T.eq(helpMenu.index, #helpMenu.rows,
+     "up from CANCEL selects the final toggle")
+helpMenu.index = #helpMenu.rows + 1
+pressed.down = true
+helpMenu:update(1 / 60)
+pressed.down = nil
+T.eq(helpMenu.index, 1, "down from CANCEL wraps to the first card")
+
+helpMenu.index = 2
+ex.requestHelp()
+helpMenu:update(1 / 60)
+T.eq(helpMenu.helpRow.id, "catch_heal",
+     "help follows the selected card")
+pressed.b = true
+helpMenu:update(1 / 60)
+pressed.b = nil
+T.eq(helpMenu.helpRow, nil, "B closes the moved-card popup")
+
+helpMenu.index = #helpMenu.rows + 1
+pressed.a = true
+helpMenu:update(1 / 60)
+pressed.a = nil
+T.eq(exitCalls, 1, "A on CANCEL exits the submenu")
+helpMenu.index = 1
+helpGame.stack.pop = savedPop
+
 -- ------- the slow vertical scroll for over-long descriptions
 
 -- pure offset math: same hold/scroll/hold/scroll-back shape as the label

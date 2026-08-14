@@ -2141,25 +2141,28 @@ return function(mod)
       end
     end
     local rows = self.rows
-    local cancelRow = #rows + 1
+    local action
     if input:wasPressed("up") then
-      self.index = self.index > 1 and self.index - 1 or cancelRow
+      action = "up"
     elseif input:wasPressed("down") then
-      self.index = self.index < cancelRow and self.index + 1 or 1
-    elseif input:wasPressed("left") or input:wasPressed("right")
-        or input:wasPressed("a") then
-      local dir = input:wasPressed("left") and -1 or 1
+      action = "down"
+    elseif input:wasPressed("left") then
+      action = "left"
+    elseif input:wasPressed("right") then
+      action = "right"
+    end
+    if action then
+      self.index = gridMove(self.index, action, #rows)
+    elseif input:wasPressed("a") then
       local row = rows[self.index]
       if row and row.step then
-        row.step(self.game, dir)
-      elseif input:wasPressed("a") then -- CANCEL
+        row.step(self.game)
+      else -- CANCEL
         self:exit()
       end
-    elseif input:wasPressed("b") or input:wasPressed("start") then
+    elseif input:wasPressed("b") then
       self:exit()
     end
-    self.scroll = OptionRows.clampScroll(self.index, self.scroll or 0,
-                                         #rows, cancelRow)
   end
 
   function QolTogglesMenu:draw()

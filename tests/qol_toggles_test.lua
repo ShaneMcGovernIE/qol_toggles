@@ -436,10 +436,34 @@ if ex.cardLabelLines and ex.cardGeometry and ex.gridMove then
     if row.cardLines then
       T.check(#row.cardLines >= 1 and #row.cardLines <= 3,
               "card label fits three lines (" .. row.id .. ")")
-      for _, line in ipairs(row.cardLines) do
-        T.check(Font.width(line) <= 64,
-                "card label fits eight glyph columns (" .. row.id .. ")")
+      for i, line in ipairs(row.cardLines) do
+        T.check(Font.width(line) <= 64
+                  or (row.cardTickers and row.cardTickers[i] ~= nil),
+                "card line fits or ticks (" .. row.id .. ": " .. line .. ")")
       end
+    end
+  end
+
+  T.same(ex.cardLabelLines("BADGELESS MOVES"),
+         { "BADGELESS", "MOVES" },
+         "card labels keep an overlong word intact")
+  local badgelessRow
+  for _, row in ipairs(rows) do
+    if row.id == "badgeless_moves" then badgelessRow = row end
+  end
+  T.neq(badgelessRow, nil, "BADGELESS MOVES row exists")
+  if badgelessRow then
+    T.neq(badgelessRow.cardTickers, nil,
+          "toggle rows expose per-line card ticker metadata")
+    if badgelessRow.cardTickers then
+      T.eq(badgelessRow.cardLines[1], "BADGELESS",
+           "the long word remains one card line")
+      T.eq(badgelessRow.cardLines[2], "MOVES",
+           "the following word remains its own card line")
+      T.neq(badgelessRow.cardTickers[1], nil,
+            "the overlong card line gets ticker metadata")
+      T.eq(badgelessRow.cardTickers[2], nil,
+           "the fitting card line stays static")
     end
   end
 end
@@ -1839,6 +1863,40 @@ do
   T.eq(hasMore, true, "first page draws the later-page marker")
   T.check(hasText("CANCEL", 56, 136),
           "CANCEL is centered on the footer")
+end
+
+-- an overflowing card line uses the card-local ticker window, not centered
+-- text that can bleed through the border
+do
+  local Font = require("src.render.Font")
+  local savedCardRows = helpMenu.rows
+  helpMenu.rows = {
+    {
+      label = "BADGELESS MOVES",
+      cardLines = { "BADGELESS", "MOVES" },
+      cardTickers = { { overflow = 8 }, nil },
+      tick = 0,
+      value = function() return "OFF" end,
+    },
+  }
+  helpMenu.index = 2 -- CANCEL, so the card itself has no cursor at y=8
+  local tickerCodes = {}
+  local savedCardDrawCode = Font.drawCode
+  Font.drawCode = function(code, x, y)
+    if y == 8 and x > 0 and x < 72 then
+      tickerCodes[#tickerCodes + 1] = { code = code, x = x, y = y }
+    end
+    return savedCardDrawCode(code, x, y)
+  end
+  helpMenu:draw()
+  Font.drawCode = savedCardDrawCode
+  helpMenu.rows = savedCardRows
+  helpMenu.index = 1
+  T.eq(#tickerCodes, 8, "the long card line draws eight clipped glyphs")
+  for _, drawn in ipairs(tickerCodes) do
+    T.check(drawn.x >= 8 and drawn.x + 8 <= 72,
+            "card ticker glyph stays inside the card interior")
+  end
 end
 
 ex.requestHelp()

@@ -168,10 +168,9 @@ love .
   ON; the rest, including AUTO BATTLER, ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.
-- Toggle labels longer than the row's label window scroll as a ticker
-  (hold at the start, scroll to the end, hold, scroll back), so a future
-  long-named switch stays readable instead of bleeding over the box
-  border.
+- In the 2×2 QOL TOGGLES cards, labels wrap only between whole words. Any
+  individual line wider than the card interior ticker-scrolls in place; shorter
+  lines stay centered.
 - START on a controller (or P on the keyboard) on any toggle row opens a
   full-screen help popup explaining what that toggle does in depth; B (or
   another START/P) closes it, and B still exits the submenu.  A

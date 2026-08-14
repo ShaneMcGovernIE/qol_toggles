@@ -68,6 +68,19 @@ do
     "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
     "gen 2 enabled count matches the shown rows")
+  T.neq(ex2.cardLabelLines, nil, "gen 2 exposes card label wrapping")
+  if ex2.cardLabelLines then
+    local Font = require("src.render.Font")
+    for _, row in ipairs(rows) do
+      local lines = ex2.cardLabelLines(row.label)
+      T.check(#lines >= 1 and #lines <= 3,
+              "gen 2 card label fits three lines (" .. row.id .. ")")
+      for _, line in ipairs(lines) do
+        T.check(Font.width(line) <= 64,
+                "gen 2 card label fits eight glyph columns (" .. row.id .. ")")
+      end
+    end
+  end
 
   local species = next(fresh.pokemon)
   local g2mon = { species = species, level = 10, statExp = {} }
@@ -389,6 +402,47 @@ T.eq(rows[31].id, "auto_cut", "toggle 31: auto cut")
 T.eq(rows[32].id, "run_hold_b", "toggle 32: run (hold B)")
 T.eq(rows[33].id, "auto_battler", "toggle 33: Battle Palace auto battler")
 T.eq(rows[34].id, "map_location", "toggle 34: map location toast")
+
+-- ------------------------------------------------ the two-column card grid
+
+T.neq(ex.cardLabelLines, nil, "card label wrapping is exported")
+T.neq(ex.cardGeometry, nil, "card geometry is exported")
+T.neq(ex.gridMove, nil, "card navigation is exported")
+if ex.cardLabelLines and ex.cardGeometry and ex.gridMove then
+  T.same(ex.cardLabelLines("FULL HEAL CATCH"), { "FULL", "HEAL", "CATCH" },
+         "card labels wrap at the card width")
+  T.same(ex.cardGeometry(1), { x = 0, y = 0, w = 10, h = 7 },
+         "top-left card geometry")
+  T.same(ex.cardGeometry(4), { x = 10, y = 7, w = 10, h = 7 },
+         "bottom-right card geometry")
+  T.eq(ex.gridMove(1, "right", 34), 2,
+       "right moves across the top row")
+  T.eq(ex.gridMove(1, "left", 34), 1,
+       "left stops at the left card")
+  T.eq(ex.gridMove(1, "down", 34), 3,
+       "down moves to the bottom row")
+  T.eq(ex.gridMove(3, "down", 34), 5,
+       "down advances to the next page")
+  T.eq(ex.gridMove(33, "down", 34), 35,
+       "last page reaches CANCEL")
+  T.eq(ex.gridMove(35, "up", 34), 34,
+       "CANCEL moves to the final toggle")
+  T.eq(ex.gridMove(35, "down", 34), 1,
+       "CANCEL wraps to the first toggle")
+
+  local Font = require("src.render.Font")
+  for _, row in ipairs(rows) do
+    T.neq(row.cardLines, nil, "row has card label lines (" .. row.id .. ")")
+    if row.cardLines then
+      T.check(#row.cardLines >= 1 and #row.cardLines <= 3,
+              "card label fits three lines (" .. row.id .. ")")
+      for _, line in ipairs(row.cardLines) do
+        T.check(Font.width(line) <= 64,
+                "card label fits eight glyph columns (" .. row.id .. ")")
+      end
+    end
+  end
+end
 
 -- ship defaults: everything on except INFINITE REPEL and the cheat-y ones
 T.eq(ex.defaultFor("poison_save"), true, "POISON SAVE ships ON")

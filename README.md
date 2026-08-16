@@ -47,8 +47,16 @@ love .
   still consumed).
 - **PERFECT DVS** — caught Pokémon get 15s across the board, the gen 1
   maximum, with their stats recomputed to match.
-- **EXP x2** — double battle EXP; the "gained N EXP" text shows the
-  doubled amount.
+- **EXP MULT** — battle EXP scaled by a selectable multiplier: 0x (earn
+  nothing), 1.5x, 2x, 3x or 4x.  The "gained N EXP" text shows the
+  scaled amount; fractions floor the way the cart floors EXP splits.
+  OFF is vanilla.  (The old fixed EXP x2 toggle becomes this selector;
+  a save that already set it keeps its 2x.)
+- **MONEY MULT** — battle earnings scaled the same way: 0x, 1.5x, 2x, 3x
+  or 4x.  Covers trainer prize money and Pay Day; the victory and
+  "picked up" texts show the scaled figure, and at 0x the prize line is
+  dropped entirely — no "You got ¥0" box — and Pay Day is cancelled.
+  OFF is vanilla.
 - **CATCH GIVES EXP** — capturing a wild Pokémon pays out the same EXP
   its defeat would: split among the mons that fought, with stat exp,
   traded boosts, level-ups and the "gained N EXP" announcement.
@@ -101,6 +109,13 @@ love .
   away from the counter, so an A-mash walks you off instead of locking
   you back into her dialogue.  The Elm's-lab and Hall-of-Fame heal
   machines are untouched.
+- **QUICK NURSE** — talking to a Pokécenter nurse heals instantly: no
+  welcome dialogue, no yes/no, no machine animation, and you turn away
+  automatically, so tapping A again just walks you off.  The nurse still
+  turns to face you, the center is remembered as the last-heal point
+  (blackouts and ESCAPE ROPE land there as usual), and the Pewter
+  Pikachu sleep scene keeps its vanilla dialogue — it is a story beat,
+  not a heal.  Works on Red and Gold alike.
 - **AUTO-REPEL** — when a repel wears off, the strongest repel in the
   bag (MAX > SUPER > plain) is used automatically and announced by an
   on-screen toast — the usual "effect wore off" text is skipped when a

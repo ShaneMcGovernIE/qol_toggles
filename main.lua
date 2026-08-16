@@ -20,7 +20,9 @@
 --                    move
 --   ALWAYS CATCH     every ball catches, Master Ball style
 --   PERFECT DVS      caught Pokémon get 15s across the board
---   EXP x2           double battle EXP
+--   EXP MULT         battle EXP scaled by 0x, 1.5x, 2x, 3x or 4x (0x
+--                    earns nothing; OFF is vanilla)
+--   MONEY MULT       battle prize money and Pay Day scaled the same way
 --   CATCH GIVES EXP  capturing a wild mon pays out the same EXP its
 --                    defeat would (split among the mons that fought)
 --   INSTANT FLEE     wild battles always escape on the first try
@@ -38,6 +40,11 @@
 --   HEAL AFTER BATTLE   every battle ends with the party fully healed
 --   AUTO-REPEL          a worn-off repel is replaced from the bag (best
 --                       one first)
+--   TURN AWAY (NURSE)  after the nurse heals you, you turn away from the
+--                      counter so an A-mash walks off
+--   QUICK NURSE        talking to a Pokecenter nurse heals instantly:
+--                      no dialogue, no machine animation, and the player
+--                      turns away by himself
 --   BULK MART           mart quantity prompts open at 10 instead of 1
 --   LIGHTS ON           dark caves render fully lit, no FLASH needed
 --   REMEMBER MOVE       the FIGHT move cursor stays on the last move
@@ -276,6 +283,12 @@ local TOAST_SECONDS = 2.5
 -- session-scoped mirror of lastEncounterSpecies.
 local lastMapId = nil
 
+-- the selectable multipliers shared by the EXP MULT and MONEY MULT rows:
+-- false = OFF (vanilla), then 0x, 1.5x, 2x, 3x, 4x.  A stored `true` is a
+-- legacy EXP x2 bucket (options.lua from before the selector) and reads
+-- as 2x -- see normalizeMult.
+local MULT_CYCLE = { false, 0, 1.5, 2, 3, 4 }
+
 local TOGGLES = {
   { key = "poison_save", label = "POISON SAVE", default = true,
     help = "A poisoned mon\nfated to faint\nfrom the step\nkeeps 1 HP and\nthe poison\nsubsides." },
@@ -297,8 +310,12 @@ local TOGGLES = {
     help = "Every ball\ncatches, Master\nBall style.\vThe ball is\nstill consumed." },
   { key = "perfect_dvs", label = "PERFECT DVS", default = false,
     help = "Caught mons get\n15s across the\nboard, the Gen 1\nmaximum, with\nstats recomputed\nto match." },
-  { key = "exp_mult", label = "EXP x2", default = false,
-    help = "Battle EXP is\ndoubled; the gained\ntext shows the new\namount." },
+  { key = "exp_mult", label = "EXP MULT", default = false,
+    cycle = MULT_CYCLE,
+    help = "Scale battle\nEXP by a\nmultiplier: 0x,\n1.5x, 2x, 3x\nor 4x.\vOFF is\nvanilla." },
+  { key = "money_mult", label = "MONEY MULT", default = false,
+    cycle = MULT_CYCLE,
+    help = "Scale battle\nprize money by\na multiplier:\n0x, 1.5x, 2x,\n3x or 4x.\vOFF\nis vanilla." },
   { key = "catch_exp", label = "CATCH GIVES EXP", default = false,
     help = "Catching a wild\nmon pays out the\nsame EXP its\ndefeat would,\nsplit among the\nmons that fought." },
   { key = "instant_flee", label = "INSTANT FLEE", default = false,
@@ -325,6 +342,8 @@ local TOGGLES = {
     help = "Every battle\nends with the\nparty fully\nhealed: HP,\nstatus, PP." },
   { key = "turn_away_nurse", label = "TURN AWAY (NURSE)", default = false,
     help = "After the nurse\nheals you, you\nturn away from\nthe counter, so\nA walks off\ninstead of\ntalking again." },
+  { key = "quick_nurse", label = "QUICK NURSE", default = false,
+    help = "Talking to a\nPokécenter nurse\nheals instantly:\nno dialogue, no\nmachine, and\nyou turn away\nautomatically." },
   { key = "auto_repel", label = "AUTO-REPEL", default = true,
     help = "When a repel\nwears off, the\nstrongest one in\nthe bag is used\nfor you.\vOut of repels:\nit wears off." },
   { key = "bulk_mart", label = "BULK MART", default = false, gen1 = true,
@@ -641,11 +660,24 @@ return function(mod)
           cardLines = cardLines,
           cardTickers = cardLineTickers(cardLines),
           help = spec.help,
+          -- a `cycle` spec (EXP MULT / MONEY MULT) steps through the
+          -- multiplier list instead of flipping a boolean: the value box
+          -- shows "OFF" / "0x" / "1.5x" / "2x" / "3x" / "4x" and A
+          -- advances to the next one (wrapping back to OFF)
+          cycle = spec.cycle ~= nil,
           value = function()
+            if spec.cycle then
+              return Strings(mod.exports.multLabel(getFn(spec.key)))
+            end
             return getFn(spec.key) and Strings("ON") or Strings("OFF")
           end,
           step = function()
-            setFn(spec.key, not getFn(spec.key))
+            if spec.cycle then
+              setFn(spec.key, mod.exports.cycleStep(getFn(spec.key),
+                                                    spec.cycle))
+            else
+              setFn(spec.key, not getFn(spec.key))
+            end
             return true
           end,
         }
@@ -1556,6 +1588,67 @@ return function(mod)
     end
   end
 
+  -- QUICK NURSE (Gen 1): the whole nurse interaction replaced -- heal the
+  -- party, remember this center as the last-heal point, turn the player
+  -- away, and finish; no dialogue, no yes/no, no machine animation.  The
+  -- nurse still turns to face the player.  Pure enough for the headless
+  -- suite (Game.save stands in for the live save), exported so the wrap
+  -- is a three-line gate.
+  mod.exports.quickNurse = function(self, onDone, npc)
+    local save = Game.save
+    if not (save and self and self.map and self.player) then
+      if onDone then onDone() end
+      return true
+    end
+    save.usedPokecenter = true -- BIT_USED_POKECENTER, like the vanilla flow
+    local Pokemon = require("src.pokemon.Pokemon")
+    for _, mon in ipairs(save.party or {}) do
+      if mon then Pokemon.heal(mon) end
+    end
+    save.lastHeal = { -- SetLastBlackoutMap, exactly the vanilla record
+      map = self.map.id, x = self.player.cellX, y = self.player.cellY,
+      outdoor = self.lastOutdoor
+        and { id = self.lastOutdoor.id, x = self.lastOutdoor.x,
+              y = self.lastOutdoor.y } or nil,
+    }
+    mod.exports.turnAround(self.player)
+    if npc then npc:facePlayer(self.player) end
+    if onDone then onDone() end
+    return true
+  end
+
+  -- QUICK NURSE (Gen 2): the nurse the player is facing, or nil.  Gold's
+  -- nurses are NPCs behind COLL_COUNTER tiles whose talk script is the
+  -- shared PokecenterNurseScript, so the lookup is the engine's own
+  -- CheckFacingObject doubling (src/world/gen2/World.lua interactBody):
+  -- double the distance over a counter tile, find the object, match the
+  -- script key.  The gen2 modules load lazily (this is only ever called
+  -- from the Gold wrap) so the gen1 boot never touches them.  Pure,
+  -- exported for the headless suite with stubbed engine modules.
+  mod.exports.nurseAt = function(world)
+    if not (world and world.player and world.vm and world.npcAt
+            and world.map) then
+      return nil
+    end
+    if world:busy() then return nil end
+    local p = world.player
+    if p.moving then return nil end
+    local Map = require("src.world.gen2.Map")
+    local Permissions = require("src.world.gen2.Permissions")
+    local d = Map.DELTA[p.facing]
+    if not d then return nil end
+    local fx, fy = p.cellX + d[1], p.cellY + d[2]
+    local ox, oy = fx, fy
+    if Permissions.isCounter(world.map:cellCollision(fx, fy)) then
+      ox, oy = p.cellX + d[1] * 2, p.cellY + d[2] * 2
+    end
+    local npc = world:npcAt(ox, oy)
+    if npc and npc.def and npc.def.scriptKey == "PokecenterNurseScript" then
+      return npc
+    end
+    return nil
+  end
+
   -- max DVs on a caught mon: all 15s, stats recomputed so the mon's actual
   -- stats match.  Gen 1's Stats.calc drives the five Gen 1 stats; Gold's
   -- Mon.stats computes the six Gen 2 stats (special split into spcA/spcD).
@@ -1868,6 +1961,74 @@ return function(mod)
   mod.exports.keepTm = function(result)
     if get("unlimited_tms") and result == "learn" then return "learnkept" end
     return result
+  end
+
+  -- ---- EXP MULT / MONEY MULT: the multiplier read/write helpers ------
+  -- The stored value is false (OFF = vanilla) or one of the MULT_CYCLE
+  -- numbers; a legacy `true` from the old EXP x2 toggle reads as 2x.
+  -- All pure, so the headless suite drives the cycle and the scaling
+  -- without a live battle.
+  mod.exports.normalizeMult = function(value)
+    if value == true then return 2 end -- legacy EXP x2 bucket
+    if value == nil or value == false then return false end
+    return value
+  end
+
+  -- the value-box label for a stored multiplier: OFF / 0x / 1.5x / 2x ...
+  mod.exports.multLabel = function(value)
+    local m = mod.exports.normalizeMult(value)
+    if m == false then return "OFF" end
+    return tostring(m) .. "x"
+  end
+
+  -- scale an amount by a multiplier; OFF passes through untouched and
+  -- everything else floors, the way the cart floors EXP splits (and the
+  -- Trainer Rematch mod floors its earnings percentage)
+  mod.exports.scaleValue = function(amount, mult)
+    local m = mod.exports.normalizeMult(mult)
+    if m == false then return amount end
+    return math.floor((amount or 0) * m)
+  end
+
+  -- the next multiplier in the cycle after a stored value (wraps to OFF)
+  mod.exports.cycleStep = function(value, cycle)
+    local m = mod.exports.normalizeMult(value)
+    for i, v in ipairs(cycle) do
+      if v == m then return cycle[i % #cycle + 1] end
+    end
+    return cycle[1]
+  end
+
+  -- shadow a trainer record with a scaled baseMoney for one call, never
+  -- touching the shared data record (the Trainer Rematch trick): prize =
+  -- baseMoney * level comes out scaled and the "You got ¥N" text prints
+  -- the scaled figure.  OFF or a trainer with no baseMoney passes through.
+  mod.exports.scaleTrainer = function(trainer, mult)
+    local m = mod.exports.normalizeMult(mult)
+    if m == false or not trainer or not trainer.baseMoney then
+      return trainer
+    end
+    return setmetatable({
+      baseMoney = mod.exports.scaleValue(trainer.baseMoney, m),
+    }, { __index = trainer })
+  end
+
+  -- Pay Day money under a multiplier: nil at 0x (nothing to pick up, and
+  -- the "picked up ¥N" line never prints), scaled otherwise, untouched
+  -- when OFF
+  mod.exports.scalePayDay = function(amount, mult)
+    if amount == nil then return nil end
+    local m = mod.exports.normalizeMult(mult)
+    if m == false then return amount end
+    if m == 0 then return nil end
+    return mod.exports.scaleValue(amount, m)
+  end
+
+  -- the trainer-victory prize line ("RED got ¥1200\nfor winning!"), so 0x
+  -- can drop it instead of printing a "You got ¥0" box
+  mod.exports.isPrizeLine = function(text)
+    return type(text) == "string" and text:find("got ", 1, true) ~= nil
+      and text:find("for winning", 1, true) ~= nil
   end
 
   -- REMEMBER CURSOR: the battle menu keeps menuIndex on the battle
@@ -2692,6 +2853,59 @@ return function(mod)
     end
   end)
 
+  -- QUICK NURSE: talking to a Pokecenter nurse heals instantly -- no
+  -- dialogue, no machine animation -- and the player turns away by
+  -- himself.  Gen 1's nurse is the overworld's own TX_SCRIPT flow
+  -- (nurseHeal: welcome, yes/no, machine, farewell), so the whole
+  -- interaction is replaced by the pure quickNurse export; the Pewter
+  -- Pikachu sleep beat is a story scene rather than a heal and keeps the
+  -- vanilla dialogue.  Gold's nurse is a ROM map script every Pokecenter
+  -- shares (PokecenterNurseScript), so the A-press dispatch
+  -- (World:interactBody) is intercepted before the script can start --
+  -- the counter-doubled nurse lookup is the pure nurseAt export -- and
+  -- the party heals with no script at all.
+  mod.events:on("game.ready", function()
+    if GEN2 then
+      local World2 = require("src.world.gen2.World")
+      if World2._qolTogglesQuickNurseInstalled then return end
+      local vanillaInteract = World2.interactBody
+      if not vanillaInteract then return end
+      World2._qolTogglesQuickNurseInstalled = true
+      World2.interactBody = function(self)
+        if get("quick_nurse") then
+          local npc = mod.exports.nurseAt(self)
+          if npc then
+            if self.vm then
+              self.vm.lastTalked = (npc.def.index or 0) + 1
+            end
+            self.talkNpc = npc
+            npc:facePlayer(self.player)
+            self:healParty()
+            mod.exports.turnAround(self.player)
+            return true
+          end
+        end
+        return vanillaInteract(self)
+      end
+      return
+    end
+    local owHeal = require("src" .. ".world.OverworldController")
+    if owHeal._qolTogglesQuickNurseInstalled then return end
+    local vanillaNurse = owHeal.nurseHeal
+    if not vanillaNurse then return end
+    owHeal._qolTogglesQuickNurseInstalled = true
+    owHeal.nurseHeal = function(self, onDone, npc)
+      if not get("quick_nurse") then
+        return vanillaNurse(self, onDone, npc)
+      end
+      if self.map and self.map.id == "PEWTER_POKECENTER"
+         and self.pikachuPewterSleepScene then
+        return vanillaNurse(self, onDone, npc)
+      end
+      return mod.exports.quickNurse(self, onDone, npc)
+    end
+  end)
+
   -- MOUSE CAM LOCK: Dramatic Shape's staged-battle camera is steered by
   -- the mouse through BattleCam.mouseOrbit / BattleCam.mousePitch --
   -- CamControl wraps love.mousemoved and calls those per event while a
@@ -3135,13 +3349,84 @@ return function(mod)
     return next(moveId, ctx)
   end)
 
-  -- EXP x2: the engine's exp.gain hook returns the raw amount every
-  -- participant is paid; doubling it scales the announcement text too
+  -- EXP MULT: the engine's exp.gain hook returns the raw amount every
+  -- participant is paid; scaling it scales the announcement text too.
+  -- 0x zeroes the gain; OFF passes through untouched.
   mod.hooks:wrap("exp.gain", function(next, ctx)
     local gained = next(ctx)
-    if get("exp_mult") then return gained * 2 end
-    return gained
+    local mult = get("exp_mult")
+    if mult == nil or mult == false then return gained end
+    if gained == nil then return nil end
+    return mod.exports.scaleValue(gained, mult)
   end)
+
+  -- MONEY MULT: scale battle earnings the same way EXP MULT scales EXP.
+  -- Gen 1 computes the prize inside BattleState:enemyMonFainted as
+  -- trainer.baseMoney * level, so the trainer record is shadowed by a
+  -- scaled-baseMoney proxy for the duration of the call (the shared data
+  -- record is never touched) and the victory text prints the scaled
+  -- figure.  At 0x the prize line is dropped entirely -- no "You got ¥0"
+  -- box -- and Pay Day (paid inside BattleState:finish) is cancelled the
+  -- same way.  Gold computes the prize in one module (Prize.award), so
+  -- the wrap scales its baseMoney input; at 0x awardPrizeMoney is
+  -- short-circuited before the money event can print a ¥0 line.
+  if not Game._qolTogglesMoneyMultInstalled then
+    Game._qolTogglesMoneyMultInstalled = true
+    if GEN2 then
+      local Prize2 = require("src.battle.gen2.Prize")
+      local vanillaAward = Prize2.award
+      Prize2.award = function(save, opts)
+        local mult = mod.exports.normalizeMult(get("money_mult"))
+        if mult == false then return vanillaAward(save, opts) end
+        local copy = {}
+        for k, v in pairs(opts or {}) do copy[k] = v end
+        copy.baseMoney = mod.exports.scaleValue(
+          (opts and opts.baseMoney) or 0, mult)
+        return vanillaAward(save, copy)
+      end
+      -- the battle module is heavier than Prize; a pcall keeps the mod
+      -- loadable on engines where the gen2 battle cannot resolve
+      local ok, Battle2 = pcall(require, "src.battle.gen2.Battle")
+      if ok and Battle2 and Battle2.awardPrizeMoney then
+        local vanillaPrize = Battle2.awardPrizeMoney
+        Battle2.awardPrizeMoney = function(self)
+          if mod.exports.normalizeMult(get("money_mult")) == 0 then
+            return nil
+          end
+          return vanillaPrize(self)
+        end
+      end
+    else
+      local BattleState = require("src.battle.BattleState")
+      local vanillaFainted = BattleState.enemyMonFainted
+      BattleState.enemyMonFainted = function(self, ...)
+        local mult = mod.exports.normalizeMult(get("money_mult"))
+        if mult == false then return vanillaFainted(self, ...) end
+        local realTrainer = self.trainer
+        self.trainer = mod.exports.scaleTrainer(realTrainer, mult)
+        local realSayNext = self.sayNext
+        if mult == 0 then
+          self.sayNext = function(s, ...)
+            if mod.exports.isPrizeLine(...) then return end
+            return realSayNext(s, ...)
+          end
+        end
+        local ok, r1, r2 = pcall(vanillaFainted, self, ...)
+        self.trainer = realTrainer
+        self.sayNext = realSayNext
+        if not ok then error(r1, 0) end
+        return r1, r2
+      end
+      local vanillaFinish = BattleState.finish
+      BattleState.finish = function(self)
+        if self.payDay then
+          self.payDay = mod.exports.scalePayDay(self.payDay,
+                                                get("money_mult"))
+        end
+        return vanillaFinish(self)
+      end
+    end
+  end
 
   -- CATCH GIVES EXP: BattleState:storeCaughtMon consults the
   -- battle.catch_exp hook before the caught mon joins the party; the

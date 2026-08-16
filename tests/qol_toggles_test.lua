@@ -68,6 +68,9 @@ do
   T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
   T.eq(shown["map_location"], true, "gen 2 keeps MAP LOCATION")
   T.eq(shown["rename"], true, "gen 2 keeps RENAME")
+  T.eq(shown["exp_mult"], true, "gen 2 keeps EXP MULT")
+  T.eq(shown["money_mult"], true, "gen 2 keeps MONEY MULT")
+  T.eq(shown["quick_nurse"], true, "gen 2 keeps QUICK NURSE")
   T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
   T.eq(ex2.visibleCount(true), #rows,
     "gen 2 visible toggle count matches the shown rows")
@@ -370,7 +373,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 35, "thirty-five toggles in the submenu")
+T.eq(#rows, 37, "thirty-seven toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -381,32 +384,39 @@ T.eq(rows[7].id, "unlimited_tms", "toggle 7: unlimited TMs")
 T.eq(rows[8].id, "forgettable_hms", "toggle 8: forgettable HMs")
 T.eq(rows[9].id, "always_catch", "toggle 9: always catch")
 T.eq(rows[10].id, "perfect_dvs", "toggle 10: perfect DVs")
-T.eq(rows[11].id, "exp_mult", "toggle 11: EXP x2")
-T.eq(rows[12].id, "catch_exp", "toggle 12: catch gives EXP")
-T.eq(rows[13].id, "instant_flee", "toggle 13: instant flee")
-T.eq(rows[14].id, "remember_cursor", "toggle 14: remember battle cursor")
-T.eq(rows[15].id, "b_to_run", "toggle 15: quick flee")
-T.eq(rows[15].label, "B FOR QUICK FLEE", "toggle 15: quick flee label")
-T.eq(rows[16].id, "heal_map_change", "toggle 16: heal on map change")
-T.eq(rows[17].id, "quick_ssanne", "toggle 17: quick S.S. Anne")
-T.eq(rows[18].id, "last_item", "toggle 18: last item in battle")
-T.eq(rows[19].id, "free_great_ball", "toggle 19: free Great Ball bonus")
-T.eq(rows[20].id, "mouse_cam_lock", "toggle 20: lock Dramatic Shape's mouse camera")
-T.eq(rows[21].id, "no_enc_dupes", "toggle 21: no encounter dupes")
-T.eq(rows[22].id, "instant_fish", "toggle 22: instant fish")
-T.eq(rows[23].id, "heal_battle", "toggle 23: heal after battle")
-T.eq(rows[24].id, "turn_away_nurse", "toggle 24: turn away from the nurse")
-T.eq(rows[25].id, "auto_repel", "toggle 25: auto-repel")
-T.eq(rows[26].id, "bulk_mart", "toggle 26: bulk mart")
-T.eq(rows[27].id, "bulk_coins", "toggle 27: bulk coins")
-T.eq(rows[28].id, "lights_on", "toggle 28: lights on")
-T.eq(rows[29].id, "remember_move", "toggle 29: remember move")
-T.eq(rows[30].id, "keep_money", "toggle 30: keep money")
-T.eq(rows[31].id, "auto_cut", "toggle 31: auto cut")
-T.eq(rows[32].id, "run_hold_b", "toggle 32: run (hold B)")
-T.eq(rows[33].id, "auto_battler", "toggle 33: Battle Palace auto battler")
-T.eq(rows[34].id, "map_location", "toggle 34: map location toast")
-T.eq(rows[35].id, "rename", "toggle 35: rename from the party menu")
+T.eq(rows[11].id, "exp_mult", "toggle 11: EXP multiplier")
+T.eq(rows[11].label, "EXP MULT", "toggle 11: EXP MULT label")
+T.eq(rows[11].cycle, true, "toggle 11: EXP MULT is a cycle row")
+T.eq(rows[12].id, "money_mult", "toggle 12: money multiplier")
+T.eq(rows[12].label, "MONEY MULT", "toggle 12: MONEY MULT label")
+T.eq(rows[12].cycle, true, "toggle 12: MONEY MULT is a cycle row")
+T.eq(rows[13].id, "catch_exp", "toggle 13: catch gives EXP")
+T.eq(rows[14].id, "instant_flee", "toggle 14: instant flee")
+T.eq(rows[15].id, "remember_cursor", "toggle 15: remember battle cursor")
+T.eq(rows[16].id, "b_to_run", "toggle 16: quick flee")
+T.eq(rows[16].label, "B FOR QUICK FLEE", "toggle 16: quick flee label")
+T.eq(rows[17].id, "heal_map_change", "toggle 17: heal on map change")
+T.eq(rows[18].id, "quick_ssanne", "toggle 18: quick S.S. Anne")
+T.eq(rows[19].id, "last_item", "toggle 19: last item in battle")
+T.eq(rows[20].id, "free_great_ball", "toggle 20: free Great Ball bonus")
+T.eq(rows[21].id, "mouse_cam_lock", "toggle 21: lock Dramatic Shape's mouse camera")
+T.eq(rows[22].id, "no_enc_dupes", "toggle 22: no encounter dupes")
+T.eq(rows[23].id, "instant_fish", "toggle 23: instant fish")
+T.eq(rows[24].id, "heal_battle", "toggle 24: heal after battle")
+T.eq(rows[25].id, "turn_away_nurse", "toggle 25: turn away from the nurse")
+T.eq(rows[26].id, "quick_nurse", "toggle 26: quick nurse")
+T.eq(rows[26].label, "QUICK NURSE", "toggle 26: QUICK NURSE label")
+T.eq(rows[27].id, "auto_repel", "toggle 27: auto-repel")
+T.eq(rows[28].id, "bulk_mart", "toggle 28: bulk mart")
+T.eq(rows[29].id, "bulk_coins", "toggle 29: bulk coins")
+T.eq(rows[30].id, "lights_on", "toggle 30: lights on")
+T.eq(rows[31].id, "remember_move", "toggle 31: remember move")
+T.eq(rows[32].id, "keep_money", "toggle 32: keep money")
+T.eq(rows[33].id, "auto_cut", "toggle 33: auto cut")
+T.eq(rows[34].id, "run_hold_b", "toggle 34: run (hold B)")
+T.eq(rows[35].id, "auto_battler", "toggle 35: Battle Palace auto battler")
+T.eq(rows[36].id, "map_location", "toggle 36: map location toast")
+T.eq(rows[37].id, "rename", "toggle 37: rename from the party menu")
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -484,7 +494,8 @@ T.eq(ex.defaultFor("unlimited_tms"), true, "UNLIMITED TMs ships ON")
 T.eq(ex.defaultFor("forgettable_hms"), true, "FORGETTABLE HMs ships ON")
 T.eq(ex.defaultFor("always_catch"), false, "ALWAYS CATCH ships OFF")
 T.eq(ex.defaultFor("perfect_dvs"), false, "PERFECT DVS ships OFF")
-T.eq(ex.defaultFor("exp_mult"), false, "EXP x2 ships OFF")
+T.eq(ex.defaultFor("exp_mult"), false, "EXP MULT ships OFF")
+T.eq(ex.defaultFor("money_mult"), false, "MONEY MULT ships OFF")
 T.eq(ex.defaultFor("catch_exp"), false, "CATCH GIVES EXP ships OFF")
 T.eq(ex.defaultFor("instant_flee"), false, "INSTANT FLEE ships OFF")
 T.eq(ex.defaultFor("remember_cursor"), true, "REMEMBER CURSOR ships ON")
@@ -509,6 +520,7 @@ T.eq(ex.defaultFor("run_hold_b"), false, "RUN (HOLD B) ships OFF")
 T.eq(ex.defaultFor("auto_battler"), false, "AUTO BATTLER ships OFF")
 T.eq(ex.defaultFor("map_location"), true, "MAP LOCATION ships ON")
 T.eq(ex.defaultFor("rename"), true, "RENAME ships ON")
+T.eq(ex.defaultFor("quick_nurse"), false, "QUICK NURSE ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -516,7 +528,15 @@ T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts emp
 for i, r in ipairs(rows) do
   T.eq(r.value(), "OFF", "row " .. i .. " defaults OFF in a bare stub state")
   T.eq(r.step(), true, "row " .. i .. " steps")
-  T.eq(r.value(), "ON", "row " .. i .. " shows ON after the step")
+  if r.cycle then
+    T.eq(r.value(), "0x", "cycle row " .. i .. " advances to 0x")
+    r.step() -- move on so the walk below lands back on OFF
+    r.step()
+    r.step()
+    r.step()
+  else
+    T.eq(r.value(), "ON", "row " .. i .. " shows ON after the step")
+  end
   T.eq(r.step(), true, "row " .. i .. " steps back")
   T.eq(r.value(), "OFF", "row " .. i .. " shows OFF again")
 end
@@ -1370,14 +1390,115 @@ do
   T.check(mon.stats.hp >= oldMax, "max DVs never lower max HP")
 end
 
--- ------------------------------------------------ EXP x2
+-- ------------------------------------------------ EXP MULT / MONEY MULT
 
 do
+  -- the multiplier helpers are pure: normalize (legacy `true` = 2x),
+  -- the value-box labels, the floor scaling, and the cycle walk
+  T.eq(ex.normalizeMult(false), false, "OFF stays OFF")
+  T.eq(ex.normalizeMult(nil), false, "unset reads OFF")
+  T.eq(ex.normalizeMult(true), 2, "the legacy EXP x2 bucket reads 2x")
+  T.eq(ex.normalizeMult(1.5), 1.5, "a number passes through")
+
+  T.eq(ex.multLabel(false), "OFF", "label: OFF")
+  T.eq(ex.multLabel(0), "0x", "label: 0x")
+  T.eq(ex.multLabel(1.5), "1.5x", "label: 1.5x")
+  T.eq(ex.multLabel(2), "2x", "label: 2x")
+  T.eq(ex.multLabel(3), "3x", "label: 3x")
+  T.eq(ex.multLabel(4), "4x", "label: 4x")
+  T.eq(ex.multLabel(true), "2x", "label: legacy bucket shows 2x")
+
+  T.eq(ex.scaleValue(100, false), 100, "OFF passes the amount through")
+  T.eq(ex.scaleValue(100, 2), 200, "2x doubles")
+  T.eq(ex.scaleValue(100, 1.5), 150, "1.5x scales evenly")
+  T.eq(ex.scaleValue(7, 1.5), 10, "1.5x floors the fraction (7*1.5=10.5)")
+  T.eq(ex.scaleValue(100, 0), 0, "0x earns nothing")
+  T.eq(ex.scaleValue(100, 4), 400, "4x quadruples")
+  T.eq(ex.scaleValue(nil, 2), 0, "a nil amount scales to 0")
+
+  local cycle = { false, 0, 1.5, 2, 3, 4 }
+  T.eq(ex.cycleStep(false, cycle), 0, "cycle: OFF -> 0x")
+  T.eq(ex.cycleStep(0, cycle), 1.5, "cycle: 0x -> 1.5x")
+  T.eq(ex.cycleStep(1.5, cycle), 2, "cycle: 1.5x -> 2x")
+  T.eq(ex.cycleStep(2, cycle), 3, "cycle: 2x -> 3x")
+  T.eq(ex.cycleStep(3, cycle), 4, "cycle: 3x -> 4x")
+  T.eq(ex.cycleStep(4, cycle), false, "cycle: 4x wraps to OFF")
+  T.eq(ex.cycleStep(true, cycle), 3, "cycle: the legacy bucket steps from 2x")
+  T.eq(ex.cycleStep(999, cycle), false, "cycle: unknown values land on OFF")
+
+  -- the money seams: the trainer proxy scales baseMoney only (other
+  -- fields resolve through the real record), Pay Day scales / cancels,
+  -- and the prize line is recognised so 0x can drop it
+  local trainer = { baseMoney = 200, name = "YOUNGSTER" }
+  local scaled = ex.scaleTrainer(trainer, 3)
+  T.neq(scaled, trainer, "an active multiplier shadows the trainer")
+  T.eq(scaled.baseMoney, 600, "the proxy carries the scaled base money")
+  T.eq(scaled.name, "YOUNGSTER", "other fields resolve through the record")
+  T.eq(trainer.baseMoney, 200, "the shared data record is untouched")
+  T.eq(ex.scaleTrainer(trainer, false), trainer, "OFF passes the trainer through")
+  T.eq(ex.scaleTrainer(trainer, 0).baseMoney, 0, "0x zeroes the prize base")
+  local noMoney = { name = "ROCKET" }
+  T.eq(ex.scaleTrainer(noMoney, 2), noMoney,
+    "a trainer with no base money is untouched")
+
+  T.eq(ex.scalePayDay(100, false), 100, "Pay Day passes through when OFF")
+  T.eq(ex.scalePayDay(100, 1.5), 150, "Pay Day scales with the multiplier")
+  T.eq(ex.scalePayDay(100, 0), nil, "0x cancels Pay Day entirely")
+  T.eq(ex.scalePayDay(nil, 2), nil, "no Pay Day stays none")
+
+  T.eq(ex.isPrizeLine("RED got ¥1200\nfor winning!"), true,
+    "the victory prize line is recognised")
+  T.eq(ex.isPrizeLine("RED picked up\n¥100!"), false,
+    "the Pay Day line is not the prize line")
+  T.eq(ex.isPrizeLine("RED got ¥500\nfor winning! Sent some to MOM!"), true,
+    "the Gold prize line is recognised too")
+  T.eq(ex.isPrizeLine(nil), false, "a nil line is not the prize line")
+
+  -- the rows: A cycles the multiplier instead of flipping ON/OFF, and
+  -- the stored value round-trips through the row's setter
+  local multState = {}
+  local multRows = ex.toggleRows(function(k) return multState[k] end,
+                                 function(k, v) multState[k] = v end)
+  local expRow = multRows[11]
+  T.eq(expRow.value(), "OFF", "EXP MULT starts OFF")
+  expRow.step()
+  T.eq(multState.exp_mult, 0, "A stores 0x")
+  T.eq(expRow.value(), "0x", "the value box shows 0x")
+  expRow.step()
+  T.eq(multState.exp_mult, 1.5, "A stores 1.5x")
+  T.eq(expRow.value(), "1.5x", "the value box shows 1.5x")
+  local moneyRow = multRows[12]
+  T.eq(moneyRow.value(), "OFF", "MONEY MULT starts OFF")
+  moneyRow.step()
+  moneyRow.step()
+  T.eq(multState.money_mult, 1.5, "MONEY MULT stores its own cycle")
+  T.eq(moneyRow.value(), "1.5x", "MONEY MULT shows 1.5x")
+end
+
+do
+  -- the exp.gain wrap scales the finished amount (the announcement text
+  -- rides the same figure): 0x zeroes it, 1.5x floors, and the legacy
+  -- `true` bucket still doubles
   local vanilla = function() return 100 end
-  bucket.exp_mult = true
-  T.eq(Runtime.call("exp.gain", vanilla, {}), 200, "EXP x2 doubles the gain")
+  local function gain()
+    return Runtime.call("exp.gain", vanilla, {})
+  end
+  bucket.exp_mult = 2
+  T.eq(gain(), 200, "2x doubles the gain")
+  bucket.exp_mult = 1.5
+  T.eq(gain(), 150, "1.5x scales the gain")
+  bucket.exp_mult = 3
+  T.eq(gain(), 300, "3x triples the gain")
+  bucket.exp_mult = 4
+  T.eq(gain(), 400, "4x quadruples the gain")
+  bucket.exp_mult = 0
+  T.eq(gain(), 0, "0x earns no EXP")
   bucket.exp_mult = false
-  T.eq(Runtime.call("exp.gain", vanilla, {}), 100, "toggle OFF passes through")
+  T.eq(gain(), 100, "OFF passes through")
+  bucket.exp_mult = true
+  T.eq(gain(), 200, "the legacy EXP x2 bucket still doubles")
+  bucket.exp_mult = nil
+  T.eq(gain(), 100, "unset passes through (default OFF)")
 end
 
 -- ------------------------------------------------ CATCH GIVES EXP
@@ -1563,6 +1684,98 @@ do
   T.eq(player.facing, "up", "toggle OFF leaves the player facing the nurse")
   T.eq(done, 2, "the original onDone runs regardless")
   bucket.turn_away_nurse = nil
+end
+
+-- ------------------------------------------------ QUICK NURSE
+
+do
+  -- Gen 1: the whole nurse interaction is replaced by quickNurse -- heal
+  -- the party, remember this center as the last-heal point, turn the
+  -- player away, finish.  The suite's game.ready emit above installed
+  -- the wrap on the real OverworldState module; the pure export is
+  -- driven here because the live dialogue needs a booted game.
+  local OW = require("src.world.OverworldController")
+  T.neq(OW._qolTogglesQuickNurseInstalled, nil,
+    "the quick-nurse wrap installs on game.ready")
+  T.eq(type(OW.nurseHeal), "function", "nurseHeal stays callable")
+
+  local Pokemon = require("src.pokemon.Pokemon")
+  local hurt = Pokemon.new(Data, "FIXMON_A", 10)
+  hurt.hp = 1
+  hurt.status = "PSN"
+  hurt.moves[1].pp = 0
+  local savedSave = Game.save
+  Game.save = { party = { hurt }, usedPokecenter = false }
+  local npc = { faced = false }
+  function npc:facePlayer() self.faced = true end
+  local ow = {
+    map = { id = "VIRIDIAN_POKECENTER" },
+    player = { cellX = 5, cellY = 6, facing = "up" },
+    lastOutdoor = { id = "VIRIDIAN_CITY", x = 3, y = 3 },
+  }
+  local done = 0
+  ex.quickNurse(ow, function() done = done + 1 end, npc)
+  T.eq(done, 1, "the caller's onDone runs")
+  T.eq(hurt.hp, hurt.stats.hp, "the party is fully healed")
+  T.eq(hurt.status, nil, "status is cleared")
+  T.eq(hurt.moves[1].pp, Data.moves[hurt.moves[1].id].pp, "PP is restored")
+  T.eq(Game.save.usedPokecenter, true, "the center is marked used")
+  T.eq(Game.save.lastHeal.map, "VIRIDIAN_POKECENTER",
+    "the last-heal record names this center")
+  T.eq(Game.save.lastHeal.x, 5, "the last-heal cell X")
+  T.eq(Game.save.lastHeal.y, 6, "the last-heal cell Y")
+  T.eq(Game.save.lastHeal.outdoor.id, "VIRIDIAN_CITY",
+    "the outdoor anchor survives")
+  T.eq(ow.player.facing, "down", "the player turns away automatically")
+  T.eq(npc.faced, true, "the nurse turns to face the player")
+
+  -- a degenerate call (no live save / no overworld) still finishes
+  local done2 = 0
+  Game.save = nil
+  ex.quickNurse({}, function() done2 = done2 + 1 end, nil)
+  T.eq(done2, 1, "a degenerate call still finishes")
+  Game.save = savedSave
+end
+
+do
+  -- Gen 2: the nurse lookup replicates the engine's counter-doubled
+  -- CheckFacingObject (nurses stand behind COLL_COUNTER tiles, so the
+  -- facing cell is doubled) and matches the shared PokecenterNurseScript
+  -- key.  The real gen2 Map/Permissions modules load headless; the world
+  -- is a stub.
+  local function stubWorld(npc, collision, opts)
+    opts = opts or {}
+    return {
+      player = { cellX = 5, cellY = 6, facing = opts.facing or "up",
+                 moving = opts.moving or false },
+      vm = {},
+      busy = function() return opts.busy or false end,
+      map = { cellCollision = function() return collision end },
+      npcAt = function() return npc end,
+    }
+  end
+  local nurse = { def = { scriptKey = "PokecenterNurseScript", index = 7 } }
+  local mart = { def = { scriptKey = "MartClerkScript" } }
+
+  -- over a counter: the object two cells up is the nurse
+  local w = stubWorld(nurse, 0x90)
+  T.eq(ex.nurseAt(w), nurse, "the nurse behind the counter is found")
+  -- no counter: the facing cell itself
+  w = stubWorld(nurse, 0x00)
+  T.eq(ex.nurseAt(w), nurse, "the nurse on the facing cell is found")
+  -- other NPCs, empty cells, and guards all stay nil
+  w = stubWorld(mart, 0x90)
+  T.eq(ex.nurseAt(w), nil, "a mart clerk is not a nurse")
+  w = stubWorld(nil, 0x90)
+  T.eq(ex.nurseAt(w), nil, "no object is not a nurse")
+  w = stubWorld(nurse, 0x90, { busy = true })
+  T.eq(ex.nurseAt(w), nil, "a busy world is not interrupted")
+  w = stubWorld(nurse, 0x90, { moving = true })
+  T.eq(ex.nurseAt(w), nil, "a moving player is not interrupted")
+  w = stubWorld(nurse, 0x90, { facing = "down" })
+  T.eq(ex.nurseAt(w), nurse, "any facing resolves the doubled cell")
+  T.eq(ex.nurseAt({}), nil, "a bare world is nil")
+  T.eq(ex.nurseAt(nil), nil, "no world is nil")
 end
 
 -- ------------------------------------------------ HEAL ON MAP CHANGE

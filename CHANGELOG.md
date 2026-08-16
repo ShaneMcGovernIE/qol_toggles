@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.23.0] - 2026-08-16
+
+### Added
+
+- QUICK NURSE: talking to a Pokécenter nurse heals instantly -- no
+  welcome dialogue, no yes/no, no machine animation -- and the player
+  turns away automatically.  The nurse still faces you, the center is
+  remembered as the last-heal point, and the Pewter Pikachu sleep scene
+  keeps its vanilla dialogue (it is a story beat, not a heal).  On Red
+  the nurse's whole TX_SCRIPT interaction is replaced; on Gold the
+  A-press dispatch is intercepted before the shared PokecenterNurseScript
+  can start, so the party heals with no script at all.  Ships OFF.
+
+## [1.22.0] - 2026-08-16
+
+### Added
+
+- MONEY MULT: battle earnings scale by a selectable multiplier (0x,
+  1.5x, 2x, 3x or 4x) -- trainer prize money and Pay Day both.  The
+  victory and "picked up" texts print the scaled figure; at 0x the
+  prize line is dropped entirely (no "You got ¥0" box) and Pay Day is
+  cancelled.  Works on Red/Blue/Yellow and Gold (Gold scales the prize
+  through its Prize.award module).  Ships OFF.
+
+### Changed
+
+- EXP x2 becomes EXP MULT: the toggle now cycles 0x, 1.5x, 2x, 3x and
+  4x instead of a fixed double.  Fractions floor like the cart's EXP
+  splits, and the "gained N EXP" text shows the scaled amount.  A save
+  that already set the old toggle reads as 2x, so nothing is lost.
+  Still ships OFF.
+
 ## [1.21.0] - 2026-08-14
 
 ### Added

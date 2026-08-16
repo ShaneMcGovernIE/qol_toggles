@@ -326,7 +326,7 @@ local TOGGLES = {
   { key = "remember_cursor", label = "REMEMBER CURSOR", default = true,
     help = "The battle menu\ncursor stays\nwhere you left it\nacross turns.\vOFF restores\nthe fresh FIGHT\ndefault each turn" },
   { key = "b_to_run", label = "B FOR QUICK FLEE", default = false,
-    help = "Press B at the\nroot of the\nbattle menu to\nmove the cursor\nto RUN.\vA then confirms\nthe escape." },
+    help = "B at the menu\nroot moves the\ncursor to RUN.\vA confirms the\nescape. Not in\ntrainer battles." },
   { key = "heal_map_change", label = "HEAL ON MAP CHANGE", default = false,
     help = "Every map change\nfully heals the\nparty: HP, status\nand all PP." },
   { key = "quick_ssanne", label = "QUICK S.S. ANNE", default = false, gen1 = true,
@@ -2139,8 +2139,10 @@ return function(mod)
   -- B FOR QUICK FLEE: at the root of the battle menu (phase "menu"), a B press
   -- parks the cursor on RUN.  Neither engine has a B branch at the menu
   -- root (B only backs out of move select), so intercepting it is
-  -- collision free.  Gen 1's demo (old man) and Safari battles use
-  -- different menus and are skipped, as are Gold's tutorial and contest
+  -- collision free.  Trainer battles are skipped: RUN sits in the menu but
+  -- can never escape (both engines refuse it), so parking the cursor there
+  -- is only ever a wasted turn.  Gen 1's demo (old man) and Safari battles
+  -- use different menus and are skipped, as are Gold's tutorial and contest
   -- menus (the same pair, different names); a locked action
   -- (thrash/rage/recharge) keeps the real menu unreachable so it is
   -- skipped too.  A fainted active mon opens the forced replacement
@@ -2148,14 +2150,20 @@ return function(mod)
   -- different places per generation: Gen 1 wraps it as battle.player.mon
   -- on the screen, Gold's screen keeps it on the battle model
   -- (battle.battle.player) and has no .player of its own -- issue #11.
-  -- Returns the cursor's landing position for headless tests.
+  -- Trainer battles are likewise found in different places: Gen 1's screen
+  -- carries kind = "trainer" and the trainer record itself, while Gold's
+  -- screen delegates to the battle model (battle.battle.trainer).  Returns
+  -- the cursor's landing position for headless tests.
   mod.exports.menuBToRun = function(battle, on)
     if not battle or not on or battle.phase ~= "menu"
        or battle.demo or battle.safari or battle.ghost
        or battle.tutorial or battle.contest
-       or battle.kind == "link" or battle.spectating
+       or battle.kind == "link" or battle.kind == "trainer" or battle.trainer
+       or battle.spectating
        or (battle.battle and (battle.battle.kind == "link"
-                              or battle.battle.link))
+                              or battle.battle.link
+                              or battle.battle.kind == "trainer"
+                              or battle.battle.trainer))
        or (battle.menuLockedAction and battle:menuLockedAction(battle.player))
        or not battle.game or not battle.game.input
        or not battle.game.input:wasPressed("b") then

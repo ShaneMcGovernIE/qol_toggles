@@ -20,7 +20,7 @@ return {
       "a MONEY MULT switch scales battle earnings the same way -- trainer prize money and Pay Day; the victory and \"picked up\" texts show the scaled figure, and at 0x the prize line is dropped entirely (no \"You got ¥0\" box) and Pay Day is cancelled",
       "an INSTANT FLEE switch escapes wild battles on the first try",
       "a REMEMBER CURSOR switch keeps the battle FIGHT/BAG/PKMN/RUN cursor where it was left across turns (OFF restores the fresh-FIGHT default each turn)",
-      "a B FOR QUICK FLEE switch moves the battle menu cursor to RUN when B is pressed at the menu root (A still confirms the escape); it never fires in the old man's demo battle, a Safari battle, or while a locked action owns the turn",
+      "a B FOR QUICK FLEE switch moves the battle menu cursor to RUN when B is pressed at the menu root (A still confirms the escape); it never fires in the old man's demo battle, a Safari battle, a trainer battle, or while a locked action owns the turn",
       "a HEAL ON MAP CHANGE switch fully heals the party (HP, status, PP) on every map transition",
       "a QUICK S.S. ANNE switch prompts the Vermilion dock sailor for the ticket once, then lets the player pass without dialogue",
       "a LAST ITEM (M) switch makes M in battle use the last item used from the bag",

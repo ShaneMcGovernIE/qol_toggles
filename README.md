@@ -71,10 +71,10 @@ love .
   jumps straight to RUN; A then confirms the escape.  (Vanilla B does
   nothing there, so nothing is taken away.)  It never fires in the old
   man's demo battle (Gold's tutorial), a Safari battle (Gold's Bug
-  Contest), a link or spectated battle, or while a locked action like
-  Thrash or recharge owns the turn.  Works on Red and Gold alike — Gold's
-  battle screen keeps the active Pokémon on its battle model, which the
-  toggle now reads too.
+  Contest), a link or spectated battle, a trainer battle, or while a
+  locked action like Thrash or recharge owns the turn.  Works on Red and
+  Gold alike — Gold's battle screen keeps the active Pokémon on its battle
+  model, which the toggle now reads too.
 - **HEAL ON MAP CHANGE** — every map transition (routes, caves, warps,
   connections, even boot) fully heals the party: HP, status, and all
   PP.

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.24.1] - 2026-08-16
+
+### Fixed
+
+- B FOR QUICK FLEE no longer jumps the battle menu cursor to RUN in
+  trainer battles, where neither engine allows running.  The toggle
+  still works in wild battles; the exclusion covers both the Gen 1
+  battle state (kind/trainer fields) and the Gen 2 battle model (the
+  screen's `.battle` table).
+
 ## [1.24.0] - 2026-08-16
 
 ### Added

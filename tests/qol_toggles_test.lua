@@ -1740,6 +1740,7 @@ do
       tutorial = over.tutorial or false,
       contest = over.contest or false,
       kind = over.kind,
+      trainer = over.trainer,
       spectating = over.spectating or false,
       menuLockedAction = over.locked and function() return true end or nil,
       game = { input = input },
@@ -1747,7 +1748,9 @@ do
       -- screen keeps it on the battle model (battle.player) and has no
       -- .player of its own
       player = over.gen2 and nil or { mon = { hp = over.hp or 10 } },
-      battle = over.gen2 and { player = { hp = over.hp or 10 } } or nil,
+      battle = over.gen2 and {
+        player = { hp = over.hp or 10 }, trainer = over.trainer,
+      } or nil,
     }
     return b
   end
@@ -1778,6 +1781,16 @@ do
     "link battle is untouched")
   T.eq(ex.menuBToRun(battle(true, { spectating = true }), true), 2,
     "spectated battle is untouched")
+
+  -- trainer battles: RUN never escapes (both engines refuse it), so the
+  -- shortcut is skipped; Gen 1 flags the screen (kind/trainer), Gold's
+  -- battle model carries the trainer record
+  T.eq(ex.menuBToRun(battle(true, { kind = "trainer" }), true), 2,
+    "a Gen 1 trainer battle is untouched")
+  T.eq(ex.menuBToRun(battle(true, { trainer = true }), true), 2,
+    "a Gen 1 trainer record is untouched")
+  T.eq(ex.menuBToRun(battle(true, { gen2 = true, trainer = true }), true), 2,
+    "Gold's trainer battle model is untouched")
 
   -- a locked action (thrash/rage/recharge) keeps the real menu closed
   T.eq(ex.menuBToRun(battle(true, { locked = true }), true), 2,

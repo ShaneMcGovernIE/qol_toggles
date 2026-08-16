@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.23.1] - 2026-08-16
+
+### Fixed
+
+- PERFECT DVS now applies to scripted-gift Pokémon too (the starter, the
+  Celadon Eevee, Game Corner prizes, fossils), not just captures.  Gen 1
+  arms the latch on pokemon.before_give; Gold arms it on the givepoke
+  script command, and the wrapped mon constructors consume it, so a gift
+  gets 15s across the board with stats recomputed and sits at full HP.
+
 ## [1.23.0] - 2026-08-16
 
 ### Added

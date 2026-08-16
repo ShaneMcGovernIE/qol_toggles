@@ -19,7 +19,7 @@
 --   FORGETTABLE HMs  HM moves can be forgotten when a mon learns a new
 --                    move
 --   ALWAYS CATCH     every ball catches, Master Ball style
---   PERFECT DVS      caught Pokémon get 15s across the board
+--   PERFECT DVS      caught and gifted Pokémon get 15s across the board
 --   EXP MULT         battle EXP scaled by 0x, 1.5x, 2x, 3x or 4x (0x
 --                    earns nothing; OFF is vanilla)
 --   MONEY MULT       battle prize money and Pay Day scaled the same way
@@ -309,7 +309,7 @@ local TOGGLES = {
   { key = "always_catch", label = "ALWAYS CATCH", default = false,
     help = "Every ball\ncatches, Master\nBall style.\vThe ball is\nstill consumed." },
   { key = "perfect_dvs", label = "PERFECT DVS", default = false,
-    help = "Caught mons get\n15s across the\nboard, the Gen 1\nmaximum, with\nstats recomputed\nto match." },
+    help = "Caught and\ngifted mons get\n15s across the\nboard, the Gen 1\nmaximum, with\nstats recomputed\nto match." },
   { key = "exp_mult", label = "EXP MULT", default = false,
     cycle = MULT_CYCLE,
     help = "Scale battle\nEXP by a\nmultiplier: 0x,\n1.5x, 2x, 3x\nor 4x.\vOFF is\nvanilla." },
@@ -2136,6 +2136,7 @@ return function(mod)
       "src.ui.ListMenu", "src.ui.QuantityBox", "src.world.OverworldController",
       "src.world.Player", "src.world.gen2.StepEvents", "src.world.gen2.World",
       "src.world.gen2.Player", "src.battle.gen2.Catching",
+      "src.pokemon.Pokemon", "src.battle.gen2.Mon",
     }
     for _, name in ipairs(names) do
       local ok, module = pcall(require, name)
@@ -3205,6 +3206,63 @@ return function(mod)
     if get("catch_heal") then mod.exports.healCaught(ev.mon) end
     if GEN2 then mod.exports.giveCatchExp(ev.battle, ev.mon) end
   end)
+
+  -- PERFECT DVS GIFTS: pokemon.caught only fires for captures, so a scripted
+  -- gift (the starter, the Celadon Eevee, a Game Corner prize, a fossil)
+  -- never got max DVs.  Gen 1's give_pokemon emits pokemon.before_give right
+  -- before it creates the mon, so a latch set there is consumed by the very
+  -- next mon constructor -- the gift itself.  Gold has no give-mon seam of
+  -- its own (docs/mod-api-gen2-compat.md), so the givepoke script.command
+  -- row arms the same latch and the wrapped Mon.new consumes it.  The latch
+  -- is cleared on the next mon's creation, so a mon built between the emit
+  -- and the gift's own constructor (another mod's before_give handler, say)
+  -- would consume it instead -- vanishingly unlikely, and the fresh gift
+  -- sits at full HP at its new max either way.
+  local giftDVsPending = false
+  if not GEN2 then
+    mod.events:on("pokemon.before_give", function()
+      if get("perfect_dvs") then giftDVsPending = true end
+    end)
+    local Pokemon = require("src.pokemon.Pokemon")
+    if not Pokemon._qolTogglesGiftDVsInstalled then
+      Pokemon._qolTogglesGiftDVsInstalled = true
+      local vanillaNew = Pokemon.new
+      Pokemon.new = function(data, species, level, rng)
+        local mon = vanillaNew(data, species, level, rng)
+        if giftDVsPending then
+          giftDVsPending = false
+          mod.exports.perfectDVs(mon, data)
+          mon.hp = (mon.stats and mon.stats.hp) or mon.hp
+        end
+        return mon
+      end
+    end
+  else
+    mod.hooks:wrap("script.command", function(next, ctx, name, args, cmd)
+      if name == "givepoke" and get("perfect_dvs") then
+        giftDVsPending = true
+      end
+      local result = next(ctx, name, args, cmd)
+      giftDVsPending = false
+      return result
+    end)
+    local Mon = require("src.battle.gen2.Mon")
+    if not Mon._qolTogglesGiftDVsInstalled then
+      Mon._qolTogglesGiftDVsInstalled = true
+      if type(Mon.new) == "function" then
+        local vanillaNew = Mon.new
+        Mon.new = function(data, species, level, opts)
+          local mon = vanillaNew(data, species, level, opts)
+          if giftDVsPending then
+            giftDVsPending = false
+            mod.exports.perfectDVs(mon, data)
+            mon.hp = mon.maxHp or mon.hp
+          end
+          return mon
+        end
+      end
+    end
+  end
 
   -- REMEMBER CURSOR / REMEMBER MOVE: turn_ended fires when the turn's
   -- actions finish and before the act queue hands back to afterQueue

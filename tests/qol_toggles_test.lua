@@ -118,6 +118,43 @@ do
   run2.loader.modOptions.qol_toggles = run2.loader.modOptions.qol_toggles or {}
   local g2bucket = run2.loader.modOptions.qol_toggles
 
+  -- PERFECT DVS GIFTS (Gold): Gold has no give-mon seam of its own, so the
+  -- givepoke script.command row arms the latch and the wrapped Mon.new
+  -- consumes it.  Drive the same hook the VM raises for every command: the
+  -- vanilla here plays runCmd's givepoke arm (givePokeMon -> Mon.new), and
+  -- the wrapped constructor must have applied max DVs to the gift.
+  g2bucket.perfect_dvs = true
+  do
+    local Mon = require("src.battle.gen2.Mon")
+    local made
+    Runtime.call("script.command", function()
+      made = Mon.new(fresh, species, 10, {})
+      return nil
+    end, { vm = {} }, "givepoke", {}, {})
+    T.neq(made, nil, "givepoke creates a mon")
+    T.eq(made.dvs.attack, 15, "gen 2 gift mon gets max DVs (attack)")
+    T.eq(made.dvs.defense, 15, "gen 2 gift mon gets max DVs (defense)")
+    T.eq(made.dvs.speed, 15, "gen 2 gift mon gets max DVs (speed)")
+    T.eq(made.hp, made.maxHp, "gen 2 gift mon is at full HP at its new max")
+  end
+  g2bucket.perfect_dvs = false
+  do
+    -- the rolled DVs are whatever Mon.new draws; OFF must leave them alone.
+    -- Inject fixed DVs through opts (the constructor honors opts.dvs) so the
+    -- assertion is deterministic: the gift keeps exactly those, not 15s.
+    local Mon = require("src.battle.gen2.Mon")
+    local made
+    local rolled = { attack = 1, defense = 2, speed = 3, special = 4 }
+    Runtime.call("script.command", function()
+      made = Mon.new(fresh, species, 10, { dvs = rolled })
+      return nil
+    end, { vm = {} }, "givepoke", {}, {})
+    for _, k in ipairs({ "attack", "defense", "speed", "special" }) do
+      T.eq(made.dvs[k], rolled[k],
+        "toggle OFF: gen 2 gift keeps its rolled DV (" .. k .. ")")
+    end
+  end
+
   local g2award = { times = 0, mon = nil }
   local g2screen = { pushed = {} }
   function g2screen:pushAll(events)
@@ -1388,6 +1425,39 @@ do
   T.eq(mon.dvs.special, 15, "special DV maxed")
   T.eq(mon.dvs.hp, 15, "hp DV derives to 15")
   T.check(mon.stats.hp >= oldMax, "max DVs never lower max HP")
+end
+
+-- PERFECT DVS GIFTS: a scripted gift (the starter, the Celadon Eevee, a
+-- Game Corner prize, a fossil) never fires pokemon.caught, so the latch
+-- armed by pokemon.before_give must flow into the very next Pokemon.new.
+-- Drive the exact engine seam: give_pokemon emits before_give, then calls
+-- Pokemon.new synchronously.  The wrapped constructor consumes the latch
+-- and applies max DVs, and the latch is one-shot (a plain build right
+-- after is untouched, rolled through a fixed rng so the assertion is
+-- deterministic).
+
+do
+  local Pokemon = require("src.pokemon.Pokemon")
+  local giftDVs = bucket.perfect_dvs
+  bucket.perfect_dvs = true
+  run.loader.events:emit("pokemon.before_give",
+    { ctx = {}, species = "FIXMON_A", level = 10 })
+  local gift = Pokemon.new(Data, "FIXMON_A", 10)
+  T.eq(gift.dvs.attack, 15, "gift mon gets max DVs (attack)")
+  T.eq(gift.dvs.defense, 15, "gift mon gets max DVs (defense)")
+  T.eq(gift.dvs.speed, 15, "gift mon gets max DVs (speed)")
+  T.eq(gift.dvs.special, 15, "gift mon gets max DVs (special)")
+  T.eq(gift.hp, gift.stats.hp, "gift mon is at full HP at its new max")
+  -- the latch is one-shot: a plain build right after is untouched
+  local plain = Pokemon.new(Data, "FIXMON_A", 10, function() return 0 end)
+  T.eq(plain.dvs.attack, 0, "gift latch consumed: next mon keeps its roll")
+  -- toggle OFF: no latch, gift keeps its roll too
+  bucket.perfect_dvs = false
+  run.loader.events:emit("pokemon.before_give",
+    { ctx = {}, species = "FIXMON_A", level = 10 })
+  local off = Pokemon.new(Data, "FIXMON_A", 10, function() return 0 end)
+  T.eq(off.dvs.attack, 0, "toggle OFF: gift keeps its rolled DVs")
+  bucket.perfect_dvs = giftDVs
 end
 
 -- ------------------------------------------------ EXP MULT / MONEY MULT

@@ -45,8 +45,9 @@ love .
   a new move.
 - **ALWAYS CATCH** — every ball catches, Master Ball style (the ball is
   still consumed).
-- **PERFECT DVS** — caught Pokémon get 15s across the board, the gen 1
-  maximum, with their stats recomputed to match.
+- **PERFECT DVS** — caught and scripted-gift Pokémon (the starter, the
+  Celadon Eevee, Game Corner prizes, fossils) get 15s across the board,
+  the gen 1 maximum, with their stats recomputed to match.
 - **EXP MULT** — battle EXP scaled by a selectable multiplier: 0x (earn
   nothing), 1.5x, 2x, 3x or 4x.  The "gained N EXP" text shows the
   scaled amount; fractions floor the way the cart floors EXP splits.

@@ -345,6 +345,8 @@ local TOGGLES = {
     help = "Battle Palace\nAI picks moves.\vDVs and stat\nEXP shape its\nstyle." },
   { key = "map_location", label = "MAP LOCATION", default = true,
     help = "Entering a new\narea shows its\nname in a toast\nthat fades out,\nlike AUTO-REPEL." },
+  { key = "rename", label = "RENAME", default = true,
+    help = "A RENAME row in\nthe party menu\nopens the name\nscreen so you\ncan rename a\nPOKéMON on the\nfly." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -1678,6 +1680,98 @@ return function(mod)
       insertAt = insertAt + 1
     end
     return list
+  end
+
+  -- RENAME: the party submenu gains a RENAME row that opens the name
+  -- screen for the selected mon, so nicknames can be changed on the fly.
+  -- One hook, both engines: Gen 1's PartyMenu and Gold's both assemble
+  -- their submenu lists through the ui.party.submenu chain, and both
+  -- dispatch a hook-injected row's onSelect(mon, game) -- Gen 1 before
+  -- its vanilla action ids (src/ui/PartyMenu.lua), Gold before its own
+  -- VANILLA_SUBMENU_IDS (src/ui/gen2/PartyMenu.lua).  Battle submenus
+  -- (ctx.battle, the SWITCH/STATS box) and eggs stay vanilla, the way
+  -- the phantom rows and the Name Rater skip them.
+  --
+  -- The submenu box holds eight rows on both carts (MAX_SUBMENU_ROWS), so
+  -- the row follows the cart's own full-list rule: the CANCEL row drops
+  -- first (Gold only appends it while the list is still short of the
+  -- cap), and if the list is still full the last field-move row gives up
+  -- its seat -- a phantom the mod itself added first, since phantoms sit
+  -- at the tail of the field-move run.  RENAME is therefore always
+  -- visible on a mon that can be renamed.  Pure (no side effects), so
+  -- the headless suite drives the row building without a live menu.
+  mod.exports.submenuRename = function(next, game, items, mon, ctx)
+    if not get("rename") then return next(game, items, mon, ctx) end
+    if (ctx and ctx.battle) or (mon and mon.isEgg) then
+      return next(game, items, mon, ctx)
+    end
+    local list = next(game, items, mon, ctx)
+    if type(list) ~= "table" then list = items end
+    local cancelAt
+    for i = #list, 1, -1 do
+      if list[i].id == "CANCEL" then cancelAt = i break end
+    end
+    if cancelAt and #list >= MAX_SUBMENU_ROWS then
+      table.remove(list, cancelAt)
+      cancelAt = nil
+    end
+    while #list >= MAX_SUBMENU_ROWS do
+      local trimmed = false
+      for i = #list, 1, -1 do
+        if list[i].fieldMove then
+          table.remove(list, i)
+          trimmed = true
+          break
+        end
+      end
+      if not trimmed then break end
+    end
+    local row = { id = "RENAME", label = Strings("RENAME"),
+                  onSelect = function(m, g) mod.exports.openRename(m, g) end }
+    if cancelAt and list[cancelAt] and list[cancelAt].id == "CANCEL" then
+      table.insert(list, cancelAt, row)
+    else
+      list[#list + 1] = row
+    end
+    return list
+  end
+
+  -- the rename write itself: "" (or a re-typed copy of the current name)
+  -- leaves the mon untouched, the Name Rater's own decline rule
+  mod.exports.applyRename = function(mon, name)
+    if mon and name and #name > 0 then mon.nickname = name end
+    return mon and mon.nickname
+  end
+
+  -- the RENAME action: push the engine's naming screen over the party
+  -- menu.  Gen 1 opens the same screen BattleState:askNicknameUI uses
+  -- (NICKNAME?, 10 letters); the current nickname pre-fills and an empty
+  -- confirm restores it.  Gold reuses World:renameMon, the exact screen
+  -- the Goldenrod Name Rater opens (initial = current name; empty or B
+  -- keeps it).  `gen2` is the runtime flag, passed explicitly so the
+  -- headless suite can drive the Gold arm on the gen 1 engine.  Returns
+  -- false when there is nothing to rename into.
+  mod.exports.openRename = function(mon, game, gen2)
+    if not (mon and game and game.stack) then return false end
+    gen2 = gen2 == nil and GEN2 or gen2
+    if gen2 then
+      local world = game.world
+      if not (world and world.renameMon) then return false end
+      world:renameMon(mon, function(name)
+        mod.exports.applyRename(mon, name)
+      end)
+      return true
+    end
+    local Screens = require("src.ui.Screens")
+    Screens.push(game, "NamingScreen", {
+      title = Strings("NICKNAME?"),
+      maxLen = 10,
+      default = mon.nickname,
+      onDone = function(name)
+        mod.exports.applyRename(mon, name)
+      end,
+    })
+    return true
   end
 
   -- append phantom move slots so the vanilla party-menu list builder shows
@@ -3158,6 +3252,14 @@ return function(mod)
       return mod.exports.submenuRows(next, game, items, mon, ctx)
     end)
   end
+
+  -- RENAME (both generations): the same ui.party.submenu chain Gen 1 and
+  -- Gold raise for every field submenu, so the RENAME row rides one wrap;
+  -- the body is the pure submenuRename export.  Registered after the
+  -- phantom-move wrap above, so it sees (and can trim) the phantom rows.
+  mod.hooks:wrap("ui.party.submenu", function(next, game, items, mon, ctx)
+    return mod.exports.submenuRename(next, game, items, mon, ctx)
+  end)
 
   -- ALWAYS CATCH: every ball lands, Master Ball style.  Gen 1's
   -- Catching.attempt takes positional args and returns caught, shakes;

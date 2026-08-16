@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.21.0] - 2026-08-14
+
+### Added
+
+- RENAME: the party submenu gains a RENAME row that opens the naming
+  screen for the selected Pokémon, so nicknames can be changed on the
+  fly without visiting the Name Rater.  The current nickname pre-fills
+  and an empty or unchanged confirm keeps it, the Name Rater's own
+  decline rule.  The row never appears in battle or on an egg, and when
+  the eight-row submenu box is full the CANCEL row (then the last
+  field-move row) gives up its seat so RENAME stays visible.  Works on
+  Red/Blue/Yellow and Gold.  Ships ON.
+
 ## [1.20.1] - 2026-08-14
 
 ### Fixed

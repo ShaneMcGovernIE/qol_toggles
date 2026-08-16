@@ -67,6 +67,7 @@ do
   T.eq(shown["poison_save"], true, "gen 2 keeps POISON SAVE")
   T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
   T.eq(shown["map_location"], true, "gen 2 keeps MAP LOCATION")
+  T.eq(shown["rename"], true, "gen 2 keeps RENAME")
   T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
   T.eq(ex2.visibleCount(true), #rows,
     "gen 2 visible toggle count matches the shown rows")
@@ -369,7 +370,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 34, "thirty-four toggles in the submenu")
+T.eq(#rows, 35, "thirty-five toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -405,6 +406,7 @@ T.eq(rows[31].id, "auto_cut", "toggle 31: auto cut")
 T.eq(rows[32].id, "run_hold_b", "toggle 32: run (hold B)")
 T.eq(rows[33].id, "auto_battler", "toggle 33: Battle Palace auto battler")
 T.eq(rows[34].id, "map_location", "toggle 34: map location toast")
+T.eq(rows[35].id, "rename", "toggle 35: rename from the party menu")
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -418,19 +420,19 @@ if ex.cardLabelLines and ex.cardGeometry and ex.gridMove then
          "top-left card geometry")
   T.same(ex.cardGeometry(4), { x = 10, y = 7, w = 10, h = 7 },
          "bottom-right card geometry")
-  T.eq(ex.gridMove(1, "right", 34), 2,
+  T.eq(ex.gridMove(1, "right", 35), 2,
        "right moves across the top row")
-  T.eq(ex.gridMove(1, "left", 34), 1,
+  T.eq(ex.gridMove(1, "left", 35), 1,
        "left stops at the left card")
-  T.eq(ex.gridMove(1, "down", 34), 3,
+  T.eq(ex.gridMove(1, "down", 35), 3,
        "down moves to the bottom row")
-  T.eq(ex.gridMove(3, "down", 34), 5,
+  T.eq(ex.gridMove(3, "down", 35), 5,
        "down advances to the next page")
-  T.eq(ex.gridMove(33, "down", 34), 35,
+  T.eq(ex.gridMove(35, "down", 35), 36,
        "last page reaches CANCEL")
-  T.eq(ex.gridMove(35, "up", 34), 34,
+  T.eq(ex.gridMove(36, "up", 35), 35,
        "CANCEL moves to the final toggle")
-  T.eq(ex.gridMove(35, "down", 34), 1,
+  T.eq(ex.gridMove(36, "down", 35), 1,
        "CANCEL wraps to the first toggle")
 
   local Font = require("src.render.Font")
@@ -506,6 +508,7 @@ T.eq(ex.defaultFor("auto_cut"), false, "AUTO CUT ships OFF")
 T.eq(ex.defaultFor("run_hold_b"), false, "RUN (HOLD B) ships OFF")
 T.eq(ex.defaultFor("auto_battler"), false, "AUTO BATTLER ships OFF")
 T.eq(ex.defaultFor("map_location"), true, "MAP LOCATION ships ON")
+T.eq(ex.defaultFor("rename"), true, "RENAME ships ON")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -954,6 +957,164 @@ do
   T.eq(rows[7].id, "CANCEL", "CANCEL survives when the list is not full")
   bucket.hm_item_required = nil
   bucket.field_moves_all = false
+end
+
+-- ------------------------------------------- RENAME
+
+do
+  -- the wrap body: the RENAME row rides the ui.party.submenu chain on
+  -- both generations (the same hook the phantom rows use on Gold), so the
+  -- pure export drives the row building here.  A field submenu gets the
+  -- row; battle submenus and eggs stay vanilla; OFF passes through.
+  local mon = { species = "FIXMON_A", nickname = "SPARKY" }
+  local game = { data = {}, stack = { push = function() end } }
+  local function vanilla(_, items) return items end
+
+  bucket.rename = true
+  local function fieldItems()
+    return { { label = "STATS" }, { label = "SWITCH" } }
+  end
+  -- the wrap mutates the list it is handed (the engine builds a fresh one
+  -- per submenu open), so every call gets its own fixture
+  local rows = ex.submenuRename(vanilla, game, fieldItems(), mon,
+                                { battle = false })
+  T.eq(#rows, 3, "RENAME appends to the Gen 1 field submenu")
+  T.eq(rows[3].id, "RENAME", "the row id is RENAME")
+  T.eq(rows[3].label, "RENAME", "the row label is RENAME")
+  T.eq(rows[3].fieldMove, nil, "the RENAME row is not a field move")
+  T.eq(rows[1].label, "STATS", "the vanilla rows keep their order")
+
+  -- Gold's list carries CANCEL; RENAME slots in before it
+  local function goldItems()
+    return { { id = "STATS", label = "STATS" },
+             { id = "SWITCH", label = "SWITCH" },
+             { id = "MOVE", label = "MOVE" },
+             { id = "ITEM", label = "ITEM" },
+             { id = "CANCEL", label = "CANCEL" } }
+  end
+  rows = ex.submenuRename(vanilla, game, goldItems(), mon, { battle = false })
+  T.eq(#rows, 6, "RENAME joins the five vanilla Gold rows")
+  T.eq(rows[5].id, "RENAME", "RENAME sits before CANCEL")
+  T.eq(rows[6].id, "CANCEL", "CANCEL stays last when there is room")
+
+  -- the eight-row box: CANCEL drops first, then the last field-move row
+  -- (a phantom first, since phantoms sit at the tail of the field run),
+  -- so RENAME is always visible
+  local function fullWithCancel()
+    return { { id = "FLY", label = "FLY", fieldMove = true },
+             { id = "DIG", label = "DIG", fieldMove = true },
+             { id = "STRENGTH", label = "STRENGTH", fieldMove = true },
+             { id = "STATS", label = "STATS" },
+             { id = "SWITCH", label = "SWITCH" },
+             { id = "MOVE", label = "MOVE" },
+             { id = "ITEM", label = "ITEM" },
+             { id = "CANCEL", label = "CANCEL" } }
+  end
+  rows = ex.submenuRename(vanilla, game, fullWithCancel(), mon,
+                          { battle = false })
+  T.eq(#rows, 8, "a full list drops CANCEL to make room")
+  T.eq(rows[8].id, "RENAME", "RENAME ends the trimmed list")
+  local hasCancel = false
+  for _, row in ipairs(rows) do
+    if row.id == "CANCEL" then hasCancel = true end
+  end
+  T.eq(hasCancel, false, "the full box has no CANCEL row (back out with B)")
+
+  local function fullNoCancel()
+    return { { id = "CUT", label = "CUT", fieldMove = true },
+             { id = "FLY", label = "FLY", fieldMove = true },
+             { id = "SURF", label = "SURF", fieldMove = true },
+             { id = "STRENGTH", label = "STRENGTH", fieldMove = true },
+             { id = "STATS", label = "STATS" },
+             { id = "SWITCH", label = "SWITCH" },
+             { id = "MOVE", label = "MOVE" },
+             { id = "ITEM", label = "ITEM" } }
+  end
+  rows = ex.submenuRename(vanilla, game, fullNoCancel(), mon,
+                          { battle = false })
+  T.eq(#rows, 8, "the box never exceeds eight rows with RENAME")
+  T.eq(rows[8].id, "RENAME", "the last field-move row gives up its seat")
+  T.eq(rows[1].id, "CUT", "the remaining field moves keep their front seats")
+  T.eq(rows[4].id, "STATS", "STATS follows the trimmed field run")
+
+  -- gates: battle, eggs and the OFF toggle all pass the list through
+  rows = ex.submenuRename(vanilla, game, fieldItems(), mon, { battle = true })
+  T.eq(#rows, 2, "in battle: no RENAME row")
+  local egg = { species = "FIXMON_A", isEgg = true }
+  rows = ex.submenuRename(vanilla, game, fieldItems(), egg,
+                          { battle = false })
+  T.eq(#rows, 2, "an egg gets no RENAME row")
+  bucket.rename = false
+  rows = ex.submenuRename(vanilla, game, fieldItems(), mon,
+                          { battle = false })
+  T.eq(#rows, 2, "toggle OFF: the vanilla list passes through")
+  bucket.rename = true
+
+  -- the rename write: a typed name lands on mon.nickname; an empty or
+  -- unchanged confirm keeps the current name (the Name Rater's rule)
+  T.eq(ex.applyRename(mon, "BLAZE"), "BLAZE", "applyRename writes the name")
+  T.eq(mon.nickname, "BLAZE", "the new nickname is set")
+  T.eq(ex.applyRename(mon, ""), "BLAZE", "an empty entry keeps the name")
+  T.eq(ex.applyRename(mon, "BLAZE"), "BLAZE",
+    "a re-typed copy of the name keeps it")
+  T.eq(ex.applyRename({ species = "FIXMON_A" }, "ASH"), "ASH",
+    "an un-nicknamed mon gains its first nickname")
+
+  -- the action: the row's onSelect opens the engine naming screen with
+  -- the current nickname pre-filled (Gen 1: NICKNAME?, 10 letters), and
+  -- Gold's arm hands the same write to World:renameMon
+  local pushed
+  local Screens = require("src.ui.Screens")
+  local vanillaPush = Screens.push
+  Screens.push = function(g, id, opts)
+    pushed = { id = id, opts = opts }
+    return { game = g }
+  end
+  local row = ex.submenuRename(vanilla, game, fieldItems(), mon,
+                               { battle = false })[3]
+  T.neq(row.onSelect, nil, "the RENAME row carries an action")
+  row.onSelect(mon, game)
+  T.neq(pushed, nil, "the naming screen is pushed")
+  T.eq(pushed.id, "NamingScreen", "Gen 1 pushes the NamingScreen")
+  T.eq(pushed.opts.title, "NICKNAME?", "the screen prompt")
+  T.eq(pushed.opts.maxLen, 10, "the 10-letter nickname length")
+  T.eq(pushed.opts.default, "BLAZE", "the current nickname pre-fills")
+  pushed.opts.onDone("EMBER")
+  T.eq(mon.nickname, "EMBER", "confirming applies the typed name")
+  pushed.opts.onDone("")
+  T.eq(mon.nickname, "EMBER", "an empty confirm keeps the name")
+  Screens.push = vanillaPush
+
+  -- Gold: the same action calls world:renameMon with a Name-Rater-shaped
+  -- callback; the harness runs on the gen 1 engine, so the branch is
+  -- driven with the explicit gen2 flag and a stub world
+  local renamedWith, renameCallback
+  local goldGame = { stack = { push = function() end },
+                     world = { renameMon = function(world, m, onDone)
+                       renamedWith = m
+                       renameCallback = onDone
+                     end } }
+  T.eq(ex.openRename(mon, goldGame, true), true,
+    "Gold: openRename hands off to world:renameMon")
+  T.eq(renamedWith, mon, "the selected mon is the rename target")
+  T.neq(renameCallback, nil, "the callback is wired")
+  renameCallback("GOLDIE")
+  T.eq(mon.nickname, "GOLDIE", "Gold: the typed name is applied")
+  renameCallback("")
+  T.eq(mon.nickname, "GOLDIE", "Gold: an empty entry keeps the name")
+  renameCallback(nil)
+  T.eq(mon.nickname, "GOLDIE", "Gold: B keeps the name")
+  local worldless = { stack = { push = function() end } }
+  T.eq(ex.openRename(mon, worldless, true), false,
+    "Gold: no world, no rename")
+  T.eq(ex.openRename(nil, goldGame, true), false,
+    "no mon, no rename")
+
+  -- the Gen 1 arm pushes the engine naming screen (driven above through
+  -- the row action); without a stack there is nothing to push onto
+  T.eq(ex.openRename(mon, { stack = nil }, false), false,
+    "Gen 1: no stack, no rename")
+  bucket.rename = nil
 end
 
 -- ------------------------------------------- UNLIMITED TMs / HM FORGET
@@ -1964,7 +2125,7 @@ helpMenu:update(1 / 60)
 pressed.down = nil
 T.eq(helpMenu.index, 5, "down advances to the next page")
 
-helpMenu.index = 33
+helpMenu.index = #helpMenu.rows - 1
 pressed.down = true
 helpMenu:update(1 / 60)
 pressed.down = nil

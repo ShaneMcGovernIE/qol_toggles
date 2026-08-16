@@ -345,6 +345,8 @@ local TOGGLES = {
     help = "Battle Palace\nAI picks moves.\vDVs and stat\nEXP shape its\nstyle." },
   { key = "map_location", label = "MAP LOCATION", default = true,
     help = "Entering a new\narea shows its\nname in a toast\nthat fades out,\nlike AUTO-REPEL." },
+  { key = "rename", label = "RENAME", default = true,
+    help = "A RENAME row in\nthe party menu\nopens the name\nscreen so you\ncan rename a\nPOKéMON on the\nfly." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -475,15 +477,40 @@ return function(mod)
     return tickers
   end
 
-  -- Toggles ride options.lua's per-mod bucket (the same store the mod
-  -- manager writes) instead of the per-save modData: NEW GAME and CONTINUE
-  -- replace the save's modData outright, which silently discarded toggles
-  -- set from the title screen, and an unsaved session lost them on quit.
-  -- options.lua survives both, so a toggle flips once and stays flipped.
-  -- Gold namespaces save.options under options.lua's `gold` block, so set()
-  -- mirrors each flip into that namespace as well (issue #9) -- see set().
-  -- the stored value for a key, falling back to the per-toggle default:
-  -- everything except INFINITE REPEL ships ON
+  -- Toggles are player configuration, so read them through the public options
+  -- facade first.  Older engines do not expose an options setter to mods, so
+  -- set() keeps the legacy live bucket/writeOptions fallback below.  The
+  -- sandbox-safe storage mirror covers builds where that legacy bucket is not
+  -- writable from a mod and is also the migration path for new installs.
+  local storedSettings = nil
+  local storageReadAttempted = false
+
+  local function loadStoredSettings()
+    if storedSettings ~= nil or storageReadAttempted then return storedSettings end
+    if not mod.storage or not mod.storage.read or not Game then return nil end
+    if not Game.save then return nil end
+    storageReadAttempted = true
+    local ok, values = pcall(function()
+      return mod.storage:read(Game, "settings")
+    end)
+    if ok and type(values) == "table" then
+      storedSettings = values
+      return storedSettings
+    end
+    return nil
+  end
+
+  local function publicOption(key)
+    if not mod.options or type(mod.options.get) ~= "function" then
+      return nil
+    end
+    local ok, value = pcall(function() return mod.options:get(key) end)
+    if ok then return value end
+    return nil
+  end
+
+  -- the stored value for a key, falling back to scoped storage and then the
+  -- per-toggle default: everything except INFINITE REPEL ships ON
   mod.exports.defaultFor = function(key)
     for _, spec in ipairs(TOGGLES) do
       if spec.key == key then return spec.default ~= false end
@@ -492,14 +519,37 @@ return function(mod)
   end
 
   local function get(key)
+    local value = publicOption(key)
+    if value ~= nil then return value end
+    local saved = loadStoredSettings()
+    if saved and saved[key] ~= nil then return saved[key] end
     local loader = Game.mods
     local bucket = loader and loader.modOptions and loader.modOptions[mod.id]
-    local v = bucket and bucket[key]
-    if v ~= nil then return v end
+    value = bucket and bucket[key]
+    if value ~= nil then return value end
     return mod.exports.defaultFor(key)
   end
 
   local function set(key, value)
+    storedSettings = storedSettings or loadStoredSettings() or {}
+    storedSettings[key] = value
+
+    -- Newer sandbox builds may expose a public setter alongside get().
+    -- Capability-test it so this mod remains loadable on older engines.
+    if mod.options and type(mod.options.set) == "function" then
+      local ok = pcall(function() mod.options:set(key, value) end)
+      if ok then return end
+    end
+
+    -- mod.storage is the supported persistence boundary for data owned by a
+    -- mod.  It is scoped by the engine to this mod and playthrough; failures
+    -- are expected on a title screen before a playthrough exists.
+    if mod.storage and mod.storage.write and Game then
+      pcall(function() mod.storage:write(Game, "settings", storedSettings) end)
+    end
+
+    -- Legacy fallback for pre-sandbox engines.  This contains no raw file
+    -- access: the engine owns writeOptions and the live option tables.
     local loader = Game.mods
     if not loader then return end
     loader.modOptions = loader.modOptions or {}
@@ -514,29 +564,6 @@ return function(mod)
       Game.save.options.modOptions[mod.id][key] = value
     end
     if Game.writeOptions then Game:writeOptions() end
-    -- Gold's engine reads/persists mod options under options.lua's `gold`
-    -- namespace, while the loader reads the TOP-LEVEL modOptions bucket at
-    -- boot (Loader:_loadState -> SaveData.loadOptions(fs).modOptions).
-    -- Mirror the flip into both so it survives a restart (issue #9).
-    -- Gen 1's writeOptions already lands in the top-level bucket, so this
-    -- only runs on Gen 2.  The full table from loadOptions carries every
-    -- other gold key (battleScene, color, modProfiles, ...), so none are
-    -- clobbered.
-    if GEN2 and loader.fs then
-      local ok, SaveData = pcall(require, "src.core.SaveData")
-      if ok and SaveData then
-        local opts = SaveData.loadOptions(loader.fs) or {}
-        opts.modOptions = opts.modOptions or {}
-        opts.modOptions[mod.id] = opts.modOptions[mod.id] or {}
-        opts.modOptions[mod.id][key] = value
-        if opts.gold then
-          opts.gold.modOptions = opts.gold.modOptions or {}
-          opts.gold.modOptions[mod.id] = opts.gold.modOptions[mod.id] or {}
-          opts.gold.modOptions[mod.id][key] = value
-        end
-        SaveData.saveOptions(opts, loader.fs)
-      end
-    end
   end
 
   -- the live setter, exported so the headless suite can drive the exact
@@ -1653,6 +1680,98 @@ return function(mod)
       insertAt = insertAt + 1
     end
     return list
+  end
+
+  -- RENAME: the party submenu gains a RENAME row that opens the name
+  -- screen for the selected mon, so nicknames can be changed on the fly.
+  -- One hook, both engines: Gen 1's PartyMenu and Gold's both assemble
+  -- their submenu lists through the ui.party.submenu chain, and both
+  -- dispatch a hook-injected row's onSelect(mon, game) -- Gen 1 before
+  -- its vanilla action ids (src/ui/PartyMenu.lua), Gold before its own
+  -- VANILLA_SUBMENU_IDS (src/ui/gen2/PartyMenu.lua).  Battle submenus
+  -- (ctx.battle, the SWITCH/STATS box) and eggs stay vanilla, the way
+  -- the phantom rows and the Name Rater skip them.
+  --
+  -- The submenu box holds eight rows on both carts (MAX_SUBMENU_ROWS), so
+  -- the row follows the cart's own full-list rule: the CANCEL row drops
+  -- first (Gold only appends it while the list is still short of the
+  -- cap), and if the list is still full the last field-move row gives up
+  -- its seat -- a phantom the mod itself added first, since phantoms sit
+  -- at the tail of the field-move run.  RENAME is therefore always
+  -- visible on a mon that can be renamed.  Pure (no side effects), so
+  -- the headless suite drives the row building without a live menu.
+  mod.exports.submenuRename = function(next, game, items, mon, ctx)
+    if not get("rename") then return next(game, items, mon, ctx) end
+    if (ctx and ctx.battle) or (mon and mon.isEgg) then
+      return next(game, items, mon, ctx)
+    end
+    local list = next(game, items, mon, ctx)
+    if type(list) ~= "table" then list = items end
+    local cancelAt
+    for i = #list, 1, -1 do
+      if list[i].id == "CANCEL" then cancelAt = i break end
+    end
+    if cancelAt and #list >= MAX_SUBMENU_ROWS then
+      table.remove(list, cancelAt)
+      cancelAt = nil
+    end
+    while #list >= MAX_SUBMENU_ROWS do
+      local trimmed = false
+      for i = #list, 1, -1 do
+        if list[i].fieldMove then
+          table.remove(list, i)
+          trimmed = true
+          break
+        end
+      end
+      if not trimmed then break end
+    end
+    local row = { id = "RENAME", label = Strings("RENAME"),
+                  onSelect = function(m, g) mod.exports.openRename(m, g) end }
+    if cancelAt and list[cancelAt] and list[cancelAt].id == "CANCEL" then
+      table.insert(list, cancelAt, row)
+    else
+      list[#list + 1] = row
+    end
+    return list
+  end
+
+  -- the rename write itself: "" (or a re-typed copy of the current name)
+  -- leaves the mon untouched, the Name Rater's own decline rule
+  mod.exports.applyRename = function(mon, name)
+    if mon and name and #name > 0 then mon.nickname = name end
+    return mon and mon.nickname
+  end
+
+  -- the RENAME action: push the engine's naming screen over the party
+  -- menu.  Gen 1 opens the same screen BattleState:askNicknameUI uses
+  -- (NICKNAME?, 10 letters); the current nickname pre-fills and an empty
+  -- confirm restores it.  Gold reuses World:renameMon, the exact screen
+  -- the Goldenrod Name Rater opens (initial = current name; empty or B
+  -- keeps it).  `gen2` is the runtime flag, passed explicitly so the
+  -- headless suite can drive the Gold arm on the gen 1 engine.  Returns
+  -- false when there is nothing to rename into.
+  mod.exports.openRename = function(mon, game, gen2)
+    if not (mon and game and game.stack) then return false end
+    gen2 = gen2 == nil and GEN2 or gen2
+    if gen2 then
+      local world = game.world
+      if not (world and world.renameMon) then return false end
+      world:renameMon(mon, function(name)
+        mod.exports.applyRename(mon, name)
+      end)
+      return true
+    end
+    local Screens = require("src.ui.Screens")
+    Screens.push(game, "NamingScreen", {
+      title = Strings("NICKNAME?"),
+      maxLen = 10,
+      default = mon.nickname,
+      onDone = function(name)
+        mod.exports.applyRename(mon, name)
+      end,
+    })
+    return true
   end
 
   -- append phantom move slots so the vanilla party-menu list builder shows
@@ -3133,6 +3252,14 @@ return function(mod)
       return mod.exports.submenuRows(next, game, items, mon, ctx)
     end)
   end
+
+  -- RENAME (both generations): the same ui.party.submenu chain Gen 1 and
+  -- Gold raise for every field submenu, so the RENAME row rides one wrap;
+  -- the body is the pure submenuRename export.  Registered after the
+  -- phantom-move wrap above, so it sees (and can trim) the phantom rows.
+  mod.hooks:wrap("ui.party.submenu", function(next, game, items, mon, ctx)
+    return mod.exports.submenuRename(next, game, items, mon, ctx)
+  end)
 
   -- ALWAYS CATCH: every ball lands, Master Ball style.  Gen 1's
   -- Catching.attempt takes positional args and returns caught, shakes;

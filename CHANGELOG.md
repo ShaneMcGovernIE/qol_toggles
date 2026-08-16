@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.21.0] - 2026-08-14
+
+### Added
+
+- RENAME: the party submenu gains a RENAME row that opens the naming
+  screen for the selected Pokémon, so nicknames can be changed on the
+  fly without visiting the Name Rater.  The current nickname pre-fills
+  and an empty or unchanged confirm keeps it, the Name Rater's own
+  decline rule.  The row never appears in battle or on an egg, and when
+  the eight-row submenu box is full the CANCEL row (then the last
+  field-move row) gives up its seat so RENAME stays visible.  Works on
+  Red/Blue/Yellow and Gold.  Ships ON.
+
+## [1.20.1] - 2026-08-14
+
+### Fixed
+
+- Added compatibility with the upcoming Grandma's Kitchen update and its
+  sandboxed mod runtime. Toggle settings now use the public mod options API
+  and scoped mod storage instead of opening the engine's raw options
+  filesystem.
+- The development test runner no longer uses environment-variable access, so
+  the repository passes the same sandbox audit as the shipped mod.
+
 ## [1.20.0] - 2026-08-14
 
 ### Added

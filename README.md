@@ -156,6 +156,14 @@ love .
   top that fades out on its own while you keep walking.  Names come from
   the town map, with the Route 10 PokeCenter corrected (the town map
   data calls it "ROCK TUNNEL").  Ships ON.
+- **RENAME** — the party submenu gains a RENAME row that opens the name
+  screen for that Pokémon, so you can rename it on the fly, no Name
+  Rater required.  The current nickname pre-fills; an empty or unchanged
+  confirm keeps it, exactly the Name Rater's rule.  The row never
+  appears in battle or on an egg.  When the submenu's eight-row box is
+  already full, the CANCEL row drops first (B still backs out) and then
+  the last field-move row gives up its seat, so RENAME is always
+  visible.  Works on Red and Gold.
 
 ## Notes
 
@@ -164,8 +172,8 @@ love .
 - Each switch is independent and stored with your preferences (options.lua),
   so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
   CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE
-  HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE and MAP LOCATION ship
-  ON; the rest, including AUTO BATTLER, ship OFF.
+  HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION and
+  RENAME ship ON; the rest, including AUTO BATTLER, ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.
 - In the 2×2 QOL TOGGLES cards, labels wrap only between whole words. Any

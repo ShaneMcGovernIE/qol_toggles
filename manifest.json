@@ -1,7 +1,7 @@
 {
   "id": "qol_toggles",
   "name": "QoL Toggles",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
@@ -14,6 +14,6 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), TMs that never break, forgettable HMs, Battle Palace-style auto battling driven by Gen 1 DVs and stat EXP, area-name toasts, a battle cursor that remembers its place and jumps to RUN on B at the menu root, no encounter dupes, instant fishing, post-battle heals, an auto turn-away after the nurse heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, hold-B running, and a mouse-cam lock for Dramatic Shape.",
+  "description": "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), TMs that never break, forgettable HMs, Battle Palace-style auto battling driven by Gen 1 DVs and stat EXP, area-name toasts, on-the-fly renaming from the party menu, a battle cursor that remembers its place and jumps to RUN on B at the menu root, no encounter dupes, instant fishing, post-battle heals, an auto turn-away after the nurse heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, hold-B running, and a mouse-cam lock for Dramatic Shape.",
   "github": "ShaneMcGovernIE/qol_toggles"
 }

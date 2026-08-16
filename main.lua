@@ -57,6 +57,9 @@
 --   BULK COINS         the Celadon Game Corner clerk sells 50, 500 or
 --                      9,999 coins at a time
 --   MAP LOCATION       entering a new area shows its name in a toast
+--   MODERN TYPES       the Gen VI+ type chart (no FAIRY) replaces the
+--                      cart chart: GHOST hits PSYCHIC, BUG and POISON
+--                      go neutral, STEEL stops resisting GHOST and DARK
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -366,6 +369,8 @@ local TOGGLES = {
     help = "Entering a new\narea shows its\nname in a toast\nthat fades out,\nlike AUTO-REPEL." },
   { key = "rename", label = "RENAME", default = true,
     help = "A RENAME row in\nthe party menu\nopens the name\nscreen so you\ncan rename a\nPOKéMON on the\nfly." },
+  { key = "modern_types", label = "MODERN TYPES", default = false,
+    help = "Gen VI+ chart,\nno FAIRY.\nGHOST hits\nPSYCHIC; BUG and\nPOISON lose their\n2x; STEEL stops\nresisting GHOST." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -549,9 +554,92 @@ return function(mod)
     return mod.exports.defaultFor(key)
   end
 
+  -- MODERN TYPES: the Gen VI+ type chart (minus FAIRY) replaces the cart's
+  -- chart while the toggle is on.  The modern chart differs from Gen 1's in
+  -- three rows -- Bug vs Poison and Poison vs Bug were 2x in Red/Blue/Yellow
+  -- (Bug resists Poison and Poison is neutral on Bug today) and Ghost was
+  -- immune to Psychic there (the famous pointer bug; it is 2x today) -- and
+  -- from Gen 2's in two: Steel stopped resisting Ghost and Dark in Gen VI.
+  -- Every other matchup is already identical, so the modern chart is just
+  -- the vanilla rows with these multipliers swapped.  FAIRY is excluded:
+  -- neither generation has the type, so no FAIRY rows are added.
+  local MODERN_TYPE_OVERRIDES = {
+    BUG   = { POISON = 5 },          -- Gen 1: 2x; Gen 2+: resisted
+    POISON = { BUG = 10 },           -- Gen 1: 2x; Gen 2+: neutral
+    GHOST = { PSYCHIC_TYPE = 20,     -- Gen 1: immune (bug); Gen 2+: 2x
+              STEEL = 10 },          -- Gen VI: Steel stops resisting Ghost
+    DARK  = { STEEL = 10 },          -- Gen VI: Steel stops resisting Dark
+  }
+
+  -- the modern rows for a vanilla matchup list: the same rows in the same
+  -- order, with the differing multipliers swapped.  Pure, so the headless
+  -- suite can assert the deltas without a battle.
+  mod.exports.modernTypeChart = function(matchups)
+    local out = {}
+    for _, row in ipairs(matchups or {}) do
+      local byDefender = MODERN_TYPE_OVERRIDES[row.attacker]
+      out[#out + 1] = {
+        attacker = row.attacker,
+        defender = row.defender,
+        multiplier = (byDefender and byDefender[row.defender])
+                     or row.multiplier,
+      }
+    end
+    return out
+  end
+
+  -- the cart's matchup rows, snapshotted once.  The snapshot lives on the
+  -- chart table itself so a hot reload that re-runs this entry chunk after
+  -- a session already swapped the chart still captures the ORIGINAL rows,
+  -- not the modern ones the previous session left in chart.matchups.
+  local vanillaMatchups = nil
+  local function snapshotVanillaMatchups()
+    if vanillaMatchups then return true end
+    local chart = Game and Game.data and Game.data.type_chart
+    local rows = chart and chart.matchups
+    if not rows then return false end
+    vanillaMatchups = chart._qolTogglesVanillaMatchups
+    if not vanillaMatchups then
+      vanillaMatchups = {}
+      for _, row in ipairs(rows) do
+        vanillaMatchups[#vanillaMatchups + 1] = {
+          attacker = row.attacker,
+          defender = row.defender,
+          multiplier = row.multiplier,
+        }
+      end
+      chart._qolTogglesVanillaMatchups = vanillaMatchups
+    end
+    return true
+  end
+
+  -- swap the chart the battles read.  Gold's battle reads
+  -- data.type_chart.matchups live on every hit, so the swap alone covers it;
+  -- Gen 1's TypeChart module caches its lookup from the last load
+  -- (BattleState.new reloads it per battle), so re-run the load when the
+  -- module is available, making a battle that is already open see the change.
+  mod.exports.applyModernTypes = function(on)
+    if on == nil then on = get("modern_types") end
+    if not snapshotVanillaMatchups() then return end
+    local chart = Game and Game.data and Game.data.type_chart
+    if not chart then return end
+    chart.matchups = on and mod.exports.modernTypeChart(vanillaMatchups)
+                       or vanillaMatchups
+    if not GEN2 then
+      local ok, TypeChart = pcall(require, "src.battle.TypeChart")
+      if ok and TypeChart.load then TypeChart.load(Game.data) end
+    end
+  end
+
   local function set(key, value)
     storedSettings = storedSettings or loadStoredSettings() or {}
     storedSettings[key] = value
+
+    -- MODERN TYPES flips the live chart the moment the toggle changes (the
+    -- menu's step calls set), ahead of the persistence paths below -- a
+    -- sandbox build that returns early from the public setter still applies
+    -- the chart.
+    if key == "modern_types" then mod.exports.applyModernTypes(value) end
 
     -- Newer sandbox builds may expose a public setter alongside get().
     -- Capability-test it so this mod remains loadable on older engines.
@@ -588,6 +676,13 @@ return function(mod)
   -- the live setter, exported so the headless suite can drive the exact
   -- persistence path (Gen1 and Gen2 buckets) without poking the UI
   mod.exports.set = set
+
+  -- MODERN TYPES: a save with the toggle ON resumes with the modern chart
+  -- already swapped in (the menu flips it live through set(); this covers
+  -- the boot where no menu is involved)
+  mod.events:on("game.ready", function()
+    mod.exports.applyModernTypes()
+  end)
 
   local function knows(mon, id)
     for _, mv in ipairs(mon.moves or {}) do

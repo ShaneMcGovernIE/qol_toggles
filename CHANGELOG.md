@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.24.0] - 2026-08-16
+
+### Added
+
+- MODERN TYPES: the Gen VI+ type chart (minus FAIRY) replaces the cart's
+  chart.  On Red/Blue/Yellow it fixes the three Gen 1-only quirks -- GHOST
+  hits PSYCHIC super effectively (the famous Gen 1 pointer bug made it
+  immune), BUG no longer beats POISON, and POISON no longer beats BUG.  On
+  Gold the only change is the Gen VI update where STEEL stopped resisting
+  GHOST and DARK.  Every other matchup is already identical, so the toggle
+  swaps just those rows; the vanilla chart is snapshotted and restored on
+  OFF.  Works on Red/Blue/Yellow and Gold.  Ships OFF.
+
+- Thanks to [@ProprietaryWeakness](https://github.com/ProprietaryWeakness)
+  for suggesting the MODERN TYPES toggle.
+
 ## [1.23.1] - 2026-08-16
 
 ### Fixed

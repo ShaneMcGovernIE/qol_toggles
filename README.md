@@ -180,6 +180,15 @@ love .
   already full, the CANCEL row drops first (B still backs out) and then
   the last field-move row gives up its seat, so RENAME is always
   visible.  Works on Red and Gold.
+- **MODERN TYPES** — the type chart from Gen VI+ (minus FAIRY, which
+  neither generation has) replaces the cart's chart.  On Red/Blue/Yellow
+  that fixes the three Gen 1-only quirks: GHOST finally hits PSYCHIC
+  super effectively (in Gen 1 the famous pointer bug made it immune),
+  BUG stops beating POISON (2x in Gen 1, resisted today) and POISON
+  stops beating BUG (2x in Gen 1, neutral today).  On Gold the only
+  change is the Gen VI update where STEEL stopped resisting GHOST and
+  DARK.  Everything else is already identical, so the toggle just swaps
+  those rows.  Works on Red and Gold.  Ships OFF.
 
 ## Notes
 

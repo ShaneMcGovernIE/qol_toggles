@@ -68,6 +68,7 @@ do
   T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
   T.eq(shown["map_location"], true, "gen 2 keeps MAP LOCATION")
   T.eq(shown["rename"], true, "gen 2 keeps RENAME")
+  T.eq(shown["modern_types"], true, "gen 2 keeps MODERN TYPES")
   T.eq(shown["exp_mult"], true, "gen 2 keeps EXP MULT")
   T.eq(shown["money_mult"], true, "gen 2 keeps MONEY MULT")
   T.eq(shown["quick_nurse"], true, "gen 2 keeps QUICK NURSE")
@@ -410,7 +411,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 37, "thirty-seven toggles in the submenu")
+T.eq(#rows, 38, "thirty-eight toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -454,6 +455,7 @@ T.eq(rows[34].id, "run_hold_b", "toggle 34: run (hold B)")
 T.eq(rows[35].id, "auto_battler", "toggle 35: Battle Palace auto battler")
 T.eq(rows[36].id, "map_location", "toggle 36: map location toast")
 T.eq(rows[37].id, "rename", "toggle 37: rename from the party menu")
+T.eq(rows[38].id, "modern_types", "toggle 38: modern type chart")
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -557,6 +559,7 @@ T.eq(ex.defaultFor("run_hold_b"), false, "RUN (HOLD B) ships OFF")
 T.eq(ex.defaultFor("auto_battler"), false, "AUTO BATTLER ships OFF")
 T.eq(ex.defaultFor("map_location"), true, "MAP LOCATION ships ON")
 T.eq(ex.defaultFor("rename"), true, "RENAME ships ON")
+T.eq(ex.defaultFor("modern_types"), false, "MODERN TYPES ships OFF")
 T.eq(ex.defaultFor("quick_nurse"), false, "QUICK NURSE ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
@@ -578,6 +581,97 @@ for i, r in ipairs(rows) do
   T.eq(r.value(), "OFF", "row " .. i .. " shows OFF again")
 end
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state empty again")
+
+-- ------------------------------------------------ MODERN TYPES
+
+-- the modern-chart builder is pure: the same rows in the same order, only
+-- the multipliers that differ swapped, and never any FAIRY rows
+do
+  local fixtureChart = {
+    { attacker = "NORMAL", defender = "GHOST", multiplier = 0 },
+    { attacker = "BUG", defender = "POISON", multiplier = 20 },
+    { attacker = "POISON", defender = "BUG", multiplier = 20 },
+    { attacker = "GHOST", defender = "PSYCHIC_TYPE", multiplier = 0 },
+    { attacker = "GHOST", defender = "GHOST", multiplier = 20 },
+    { attacker = "WATER", defender = "FIRE", multiplier = 20 },
+  }
+  local modern = ex.modernTypeChart(fixtureChart)
+  T.eq(#modern, #fixtureChart, "modern chart keeps every row")
+  T.eq(modern[1].multiplier, 0, "unchanged rows keep their multiplier")
+  T.eq(modern[2].multiplier, 5, "BUG>POISON drops to resisted")
+  T.eq(modern[3].multiplier, 10, "POISON>BUG drops to neutral")
+  T.eq(modern[4].multiplier, 20, "GHOST>PSYCHIC becomes super effective")
+  T.eq(modern[5].multiplier, 20, "GHOST>GHOST is unchanged")
+  T.eq(modern[6].multiplier, 20, "WATER>FIRE is unchanged")
+  T.same(ex.modernTypeChart({}), {}, "an empty chart stays empty (no FAIRY rows)")
+
+  -- the Gen VI Steel change rides the same overrides: no-op rows on a Gen 1
+  -- chart (no STEEL there), the real fix on a Gold chart
+  local steel = ex.modernTypeChart({
+    { attacker = "GHOST", defender = "STEEL", multiplier = 5 },
+    { attacker = "DARK", defender = "STEEL", multiplier = 5 },
+    { attacker = "FIRE", defender = "STEEL", multiplier = 20 },
+  })
+  T.eq(steel[1].multiplier, 10, "GHOST>STEEL becomes neutral")
+  T.eq(steel[2].multiplier, 10, "DARK>STEEL becomes neutral")
+  T.eq(steel[3].multiplier, 20, "FIRE>STEEL stays super effective")
+end
+
+-- the live chart follows the toggle: the engine's lookups move to the modern
+-- numbers while ON and the vanilla chart is restored on OFF
+do
+  local TypeChart = require("src.battle.TypeChart")
+  -- the harness leaves Game.data unset; point it at the real Data the way
+  -- the LIGHTS ON test does, and hand it back afterwards
+  local savedData = Game.data
+  Game.data = Data
+  local liveVanilla = {}
+  for _, row in ipairs(Game.data.type_chart.matchups) do
+    liveVanilla[#liveVanilla + 1] = { attacker = row.attacker,
+      defender = row.defender, multiplier = row.multiplier }
+  end
+  T.eq(TypeChart.effectiveness("BUG", { "POISON" }), 20,
+    "vanilla: BUG is super effective on POISON")
+  T.eq(TypeChart.effectiveness("GHOST", { "PSYCHIC_TYPE" }), 0,
+    "vanilla: GHOST is immune to PSYCHIC (the Gen 1 bug)")
+
+  -- the toggle flips the chart through the exported setter (the same path
+  -- the menu's step uses); Game.save / writeOptions stay out of the way so
+  -- the persistence side-effects never touch the dev options file
+  local savedSave, savedWrite = Game.save, Game.writeOptions
+  Game.save, Game.writeOptions = nil, nil
+  ex.set("modern_types", true)
+  T.eq(run.loader.modOptions.qol_toggles.modern_types, true,
+    "set persists the modern_types bucket")
+  T.eq(TypeChart.effectiveness("BUG", { "POISON" }), 5,
+    "modern: BUG is resisted by POISON")
+  T.eq(TypeChart.effectiveness("POISON", { "BUG" }), 10,
+    "modern: POISON is neutral on BUG")
+  T.eq(TypeChart.effectiveness("GHOST", { "PSYCHIC_TYPE" }), 20,
+    "modern: GHOST hits PSYCHIC super effectively")
+  T.same(TypeChart.rows("BUG", { "POISON" }), { 5 },
+    "modern: TypeChart.rows mirrors the swapped multiplier")
+
+  ex.set("modern_types", false)
+  T.eq(run.loader.modOptions.qol_toggles.modern_types, false,
+    "set flips the bucket back")
+  T.eq(TypeChart.effectiveness("BUG", { "POISON" }), 20,
+    "off again: the vanilla BUG>POISON row is back")
+  T.eq(TypeChart.effectiveness("GHOST", { "PSYCHIC_TYPE" }), 0,
+    "off again: GHOST is immune to PSYCHIC once more")
+  local liveAfter = Game.data.type_chart.matchups
+  T.eq(#liveAfter, #liveVanilla, "the live chart regains its row count")
+  for i, row in ipairs(liveAfter) do
+    T.eq(row.attacker, liveVanilla[i].attacker,
+      "row " .. i .. " attacker restored")
+    T.eq(row.defender, liveVanilla[i].defender,
+      "row " .. i .. " defender restored")
+    T.eq(row.multiplier, liveVanilla[i].multiplier,
+      "row " .. i .. " multiplier restored")
+  end
+  Game.save, Game.writeOptions = savedSave, savedWrite
+  Game.data = savedData
+end
 
 -- ------------------------------------------------ POISON SAVE
 

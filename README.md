@@ -110,10 +110,11 @@ love .
   away from the counter, so an A-mash walks you off instead of locking
   you back into her dialogue.  The Elm's-lab and Hall-of-Fame heal
   machines are untouched.
-- **QUICK NURSE** — talking to a Pokécenter nurse heals instantly: no
-  welcome dialogue, no yes/no, no machine animation, and you turn away
-  automatically, so tapping A again just walks you off.  The nurse still
-  turns to face you, the center is remembered as the last-heal point
+- **QUICK NURSE** — talking to a Pokécenter nurse skips all dialogue:
+  no welcome dialogue, no yes/no, no farewell — it plays the healing
+  machine animation and jingle, and you turn away automatically, so
+  tapping A again just walks you off.  The nurse still turns to face you
+  when finished, the center is remembered as the last-heal point
   (blackouts and ESCAPE ROPE land there as usual), and the Pewter
   Pikachu sleep scene keeps its vanilla dialogue — it is a story beat,
   not a heal.  Works on Red and Gold alike.
@@ -171,7 +172,8 @@ love .
   same toast style as AUTO-REPEL's refill banner: a small box near the
   top that fades out on its own while you keep walking.  Names come from
   the town map, with the Route 10 PokeCenter corrected (the town map
-  data calls it "ROCK TUNNEL").  Ships ON.
+  data calls it "ROCK TUNNEL").  Long names (like ROCK TUNNEL POKECENTER)
+  smoothly ticker-scroll horizontally so no text is cut off.  Ships ON.
 - **RENAME** — the party submenu gains a RENAME row that opens the name
   screen for that Pokémon, so you can rename it on the fly, no Name
   Rater required.  The current nickname pre-fills; an empty or unchanged
@@ -182,13 +184,22 @@ love .
   visible.  Works on Red and Gold.
 - **MODERN TYPES** — the type chart from Gen VI+ (minus FAIRY, which
   neither generation has) replaces the cart's chart.  On Red/Blue/Yellow
-  that fixes the three Gen 1-only quirks: GHOST finally hits PSYCHIC
-  super effectively (in Gen 1 the famous pointer bug made it immune),
-  BUG stops beating POISON (2x in Gen 1, resisted today) and POISON
-  stops beating BUG (2x in Gen 1, neutral today).  On Gold the only
-  change is the Gen VI update where STEEL stopped resisting GHOST and
-  DARK.  Everything else is already identical, so the toggle just swaps
-  those rows.  Works on Red and Gold.  Ships OFF.
+  that fixes the Gen 1 quirks: FIRE resists ICE (neutral in Gen 1),
+  GHOST finally hits PSYCHIC super effectively (in Gen 1 the famous pointer
+  bug made it immune), BUG stops beating POISON (2x in Gen 1, resisted today)
+  and POISON stops beating BUG (2x in Gen 1, neutral today).  On Gold the
+  only change is the Gen VI update where STEEL stopped resisting GHOST and
+  DARK.  Everything else is already identical, so the toggle swaps and
+  adds those rows.  Works on Red and Gold.  Ships OFF.
+- **EXP BAR** — renders a Gen 2-style EXP bar below the player's HP bar
+  in battle, filling the arrow/underline groove in black as the active
+  Pokémon earns EXP toward its next level. Smoothly animates during battle
+  and loops through level-ups. Gen 1 only (Gold already renders a native
+  battle EXP bar). Ships OFF.
+- **PARTY SCROLL** — in the Pokémon STATS / Summary screen, pressing Up
+  and Down cycles through your party Pokémon without closing the screen,
+  refreshing the sprite, stats and cry while retaining the page you are on
+  (Stats or Moves & EXP).  Ships ON.
 
 ## Notes
 
@@ -197,8 +208,9 @@ love .
 - Each switch is independent and stored with your preferences (options.lua),
   so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
   CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE
-  HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION and
-  RENAME ship ON; the rest, including AUTO BATTLER, ship OFF.
+  HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION,
+  RENAME and PARTY SCROLL ship ON; the rest, including AUTO BATTLER and
+  EXP BAR, ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.
 - In the 2×2 QOL TOGGLES cards, labels wrap only between whole words. Any

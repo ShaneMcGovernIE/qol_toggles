@@ -60,6 +60,8 @@
 --   MODERN TYPES       the Gen VI+ type chart (no FAIRY) replaces the
 --                      cart chart: GHOST hits PSYCHIC, BUG and POISON
 --                      go neutral, STEEL stops resisting GHOST and DARK
+--   EXP BAR            Gen 2-style EXP bar below the player's HP bar in
+--                      battle (fills the arrow/underline groove in black)
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -346,7 +348,7 @@ local TOGGLES = {
   { key = "turn_away_nurse", label = "TURN AWAY (NURSE)", default = false,
     help = "After the nurse\nheals you, you\nturn away from\nthe counter, so\nA walks off\ninstead of\ntalking again." },
   { key = "quick_nurse", label = "QUICK NURSE", default = false,
-    help = "Talking to a\nPokécenter nurse\nheals instantly:\nno dialogue, no\nmachine, and\nyou turn away\nautomatically." },
+    help = "Talking to a\nPokécenter nurse\nskips all dialog:\nplays the heal\nmachine animation\nand you turn away\nautomatically." },
   { key = "auto_repel", label = "AUTO-REPEL", default = true,
     help = "When a repel\nwears off, the\nstrongest one in\nthe bag is used\nfor you.\vOut of repels:\nit wears off." },
   { key = "bulk_mart", label = "BULK MART", default = false, gen1 = true,
@@ -370,7 +372,11 @@ local TOGGLES = {
   { key = "rename", label = "RENAME", default = true,
     help = "A RENAME row in\nthe party menu\nopens the name\nscreen so you\ncan rename a\nPOKéMON on the\nfly." },
   { key = "modern_types", label = "MODERN TYPES", default = false,
-    help = "Gen VI+ chart,\nno FAIRY.\nGHOST hits\nPSYCHIC; BUG and\nPOISON lose their\n2x; STEEL stops\nresisting GHOST." },
+    help = "Gen VI+ chart,\nno FAIRY.\nFIRE resists\nICE; GHOST hits\nPSYCHIC; BUG and\nPOISON match modern;\nSTEEL fix." },
+  { key = "exp_bar", label = "EXP BAR", default = false, gen1 = true,
+    help = "Gen 2-style EXP\nbar under the\nplayer's HP bar\nin battle.\vFills the arrow\nline with your\nprogress to the\nnext level." },
+  { key = "party_scroll", label = "PARTY SCROLL", default = true,
+    help = "In the STATS screen,\nUp/Down cycles your\nparty POKéMON.\vRetains the page\n(Stats or Moves)\nyou are on." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -556,34 +562,55 @@ return function(mod)
 
   -- MODERN TYPES: the Gen VI+ type chart (minus FAIRY) replaces the cart's
   -- chart while the toggle is on.  The modern chart differs from Gen 1's in
-  -- three rows -- Bug vs Poison and Poison vs Bug were 2x in Red/Blue/Yellow
-  -- (Bug resists Poison and Poison is neutral on Bug today) and Ghost was
-  -- immune to Psychic there (the famous pointer bug; it is 2x today) -- and
-  -- from Gen 2's in two: Steel stopped resisting Ghost and Dark in Gen VI.
-  -- Every other matchup is already identical, so the modern chart is just
-  -- the vanilla rows with these multipliers swapped.  FAIRY is excluded:
-  -- neither generation has the type, so no FAIRY rows are added.
+  -- four matchups -- Fire resists Ice in Gen 2+ (was 1x neutral in Gen 1),
+  -- Bug vs Poison and Poison vs Bug were 2x in Red/Blue/Yellow (Bug resists
+  -- Poison and Poison is neutral on Bug today), and Ghost was immune to Psychic
+  -- there (the famous pointer bug; it is 2x today) -- and from Gen 2's in two:
+  -- Steel stopped resisting Ghost and Dark in Gen VI.  Every other matchup is
+  -- already identical, so the modern chart is just the vanilla rows with
+  -- these multipliers swapped and any missing rows (like ICE on FIRE) added.
+  -- FAIRY is excluded: neither generation has the type, so no FAIRY rows
+  -- are added.
   local MODERN_TYPE_OVERRIDES = {
-    BUG   = { POISON = 5 },          -- Gen 1: 2x; Gen 2+: resisted
-    POISON = { BUG = 10 },           -- Gen 1: 2x; Gen 2+: neutral
-    GHOST = { PSYCHIC_TYPE = 20,     -- Gen 1: immune (bug); Gen 2+: 2x
-              STEEL = 10 },          -- Gen VI: Steel stops resisting Ghost
-    DARK  = { STEEL = 10 },          -- Gen VI: Steel stops resisting Dark
+    ICE   = { FIRE = 5 },            -- Gen 1: 1x (neutral); Gen 2+: resisted (0.5x)
+    BUG   = { POISON = 5 },          -- Gen 1: 2x; Gen 2+: resisted (0.5x)
+    POISON = { BUG = 10 },           -- Gen 1: 2x; Gen 2+: neutral (1.0x)
+    GHOST = { PSYCHIC_TYPE = 20,     -- Gen 1: immune (0x bug); Gen 2+: 2.0x
+              PSYCHIC = 20,          -- Gen 2: 2.0x
+              STEEL = 10 },          -- Gen VI: Steel stops resisting Ghost (1.0x)
+    DARK  = { STEEL = 10 },          -- Gen VI: Steel stops resisting Dark (1.0x)
   }
 
   -- the modern rows for a vanilla matchup list: the same rows in the same
-  -- order, with the differing multipliers swapped.  Pure, so the headless
-  -- suite can assert the deltas without a battle.
+  -- order, with the differing multipliers swapped, and any missing modern
+  -- entries (like ICE on FIRE) injected.  Pure, so the headless suite can
+  -- assert the deltas without a battle.
   mod.exports.modernTypeChart = function(matchups)
     local out = {}
+    local seen = {}
     for _, row in ipairs(matchups or {}) do
       local byDefender = MODERN_TYPE_OVERRIDES[row.attacker]
+      local override = byDefender and byDefender[row.defender]
+      seen[row.attacker .. ":" .. row.defender] = true
       out[#out + 1] = {
         attacker = row.attacker,
         defender = row.defender,
-        multiplier = (byDefender and byDefender[row.defender])
-                     or row.multiplier,
+        multiplier = override or row.multiplier,
       }
+    end
+    -- Add any modern matchups that were absent from the vanilla chart
+    for attacker, defenders in pairs(MODERN_TYPE_OVERRIDES) do
+      for defender, multiplier in pairs(defenders) do
+        local key = attacker .. ":" .. defender
+        if not seen[key] then
+          seen[key] = true
+          out[#out + 1] = {
+            attacker = attacker,
+            defender = defender,
+            multiplier = multiplier,
+          }
+        end
+      end
     end
     return out
   end
@@ -909,13 +936,31 @@ return function(mod)
     return id
   end
 
-  -- AUTO-REPEL toast: consume the refill and arm the on-screen banner
-  -- that announces it; returns the item used, or nil when the bag has
+  -- AUTO-REPEL / MAP LOCATION toast: consume the refill and arm the on-screen
+  -- banner that announces it; returns the item used, or nil when the bag has
   -- none.  `now` is the toast clock (love.timer.getTime in game; the
   -- headless suite passes its own so expiry is deterministic).
+  -- Long names that exceed the 16-character interior (128px) ticker-scroll
+  -- horizontally, and the duration is extended so the player can read the
+  -- start, the scroll, and the end before the toast fades out.
   mod.exports.setAutoRepelToast = function(text, now)
-    autoRepelToast = { text = text,
-                       expire = (now or 0) + TOAST_SECONDS }
+    now = now or 0
+    local duration = TOAST_SECONDS
+    local okFont, Font = pcall(require, "src.render.Font")
+    if okFont and Font and Font.width then
+      local w = Font.width(text)
+      local overflow = w - 128
+      if overflow > 0 then
+        -- hold at start (1.6s) + scroll to end (overflow / 16) + hold at end (1.6s) + fadeout (0.5s) + margin (0.3s)
+        duration = TICKER_HOLD * 2 + (overflow / TICKER_SPEED) + 0.8
+      end
+    end
+    autoRepelToast = {
+      text = text,
+      start = now,
+      expire = now + duration,
+      duration = duration,
+    }
   end
 
   mod.exports.autoRepelToastText = function(now)
@@ -924,6 +969,42 @@ return function(mod)
     end
     autoRepelToast = nil
     return nil
+  end
+
+  -- Toast layout: computes the box geometry, text clipping window,
+  -- horizontal scroll offset (if overflowing) and fade-out alpha.
+  mod.exports.toastLayout = function(toast, now)
+    if not (toast and toast.text) then return nil end
+    now = now or 0
+    if toast.expire and toast.expire <= now then return nil end
+    local okFont, Font = pcall(require, "src.render.Font")
+    local w = (okFont and Font and Font.width) and Font.width(toast.text) or (#toast.text * 8)
+    local maxInterior = 128
+    local bw = math.min(144, w + 16)
+    local bx = math.floor((160 - bw) / 2)
+    local alpha = 1
+    if toast.expire then
+      alpha = math.min(1, math.max(0, (toast.expire - now) / 0.5))
+    end
+    local off = 0
+    local overflow = w - maxInterior
+    if overflow > 0 then
+      local t = now - (toast.start or (toast.expire - (toast.duration or TOAST_SECONDS)))
+      off = tickerOffset(t, overflow)
+    end
+    return {
+      text = toast.text,
+      x = bx,
+      y = 8,
+      w = bw,
+      h = 16,
+      textX = bx + 8,
+      textY = 12,
+      textW = maxInterior,
+      overflow = overflow > 0 and overflow or 0,
+      offset = off,
+      alpha = alpha,
+    }
   end
 
   mod.exports.autoRepelToastFor = function(save, data, now)
@@ -1554,6 +1635,162 @@ return function(mod)
     return true
   end
 
+  -- ---------------------------------------------------- BATTLE EXP BAR
+  -- Gen 2-style EXP bar in battle: renders a thin black bar below the
+  -- player's HP numbers along the bottom border line (x=80..147, y=89, width 67px,
+  -- height 2px), filling from right to left as the active Pokémon gains EXP
+  -- toward its next level. At max level (level 100), the bar fills completely
+  -- from the right vertical tick all the way to the left arrow.
+  -- Smoothly animates during battle when EXP is gained and loops through
+  -- level-ups. Gold draws its own native XP bar, so this toggle is Gen 1 only.
+  local EXP_BAR_X = 80
+  local EXP_BAR_RIGHT = 147
+  local EXP_BAR_WIDTH = 67
+  local EXP_BAR_Y = 89
+  local EXP_BAR_HEIGHT = 2
+  local EXP_BAR_SPEED = 40 -- pixels per second animation rate
+
+  mod.exports.EXP_BAR_X = EXP_BAR_X
+  mod.exports.EXP_BAR_RIGHT = EXP_BAR_RIGHT
+  mod.exports.EXP_BAR_WIDTH = EXP_BAR_WIDTH
+  mod.exports.EXP_BAR_HEIGHT = EXP_BAR_HEIGHT
+
+  -- Minimum total EXP required to reach a given level for a growth rate.
+  -- Delegates to src.pokemon.Growth when available, falling back to the standard
+  -- Gen 1 formula table.
+  mod.exports.expForLevel = function(growthRate, level, growthRatesData)
+    local ok, Growth = pcall(require, "src.pokemon.Growth")
+    if ok and Growth and type(Growth.expForLevel) == "function" then
+      return Growth.expForLevel(growthRate, level, growthRatesData)
+    end
+    local n = math.max(1, math.min(100, tonumber(level) or 1))
+    local rate = tostring(growthRate or ""):lower()
+    if rate == "fast" or (rate:find("fast") and not rate:find("medium")) then
+      return math.floor(4 * n * n * n / 5)
+    elseif rate == "slow" or (rate:find("slow") and not rate:find("medium")) then
+      return math.floor(5 * n * n * n / 4)
+    elseif rate:find("medium") and rate:find("slow") then
+      if n <= 1 then return 0 end
+      return math.floor(1.2 * n * n * n - 15 * n * n + 100 * n - 140)
+    else -- medium fast / medium / default
+      return n * n * n
+    end
+  end
+
+  -- Progress within the current level: returns (progressExp, neededExp, fraction, filledPixels).
+  mod.exports.expBarProgress = function(mon, data)
+    if not (mon and mon.species) then return 0, 0, 0, 0 end
+    local pokemonData = data and data.pokemon
+    local def = pokemonData and pokemonData[mon.species]
+    local growthRate = (def and def.growthRate) or (mon.def and mon.def.growthRate) or "Medium Fast"
+    local growthRates = data and data.growth_rates
+    local level = mon.level or 1
+    local cap = (data and data.constants and data.constants.levelCap) or 100
+
+    if level >= cap then
+      return 0, 0, 1.0, EXP_BAR_WIDTH
+    end
+
+    local curLevelExp = mod.exports.expForLevel(growthRate, level, growthRates)
+    local nextLevelExp = mod.exports.expForLevel(growthRate, level + 1, growthRates)
+    local needed = nextLevelExp - curLevelExp
+    if needed <= 0 then return 0, 0, 0, 0 end
+
+    local curExp = mon.exp or curLevelExp
+    local progress = math.max(0, math.min(needed, curExp - curLevelExp))
+    local fraction = progress / needed
+    local filledPixels = math.floor(fraction * EXP_BAR_WIDTH)
+    return progress, needed, fraction, filledPixels
+  end
+
+  -- Resolve target pixel fill for the active player Pokémon in battle.
+  mod.exports.expBarPixels = function(battle)
+    local mon = battle and battle.player and battle.player.mon
+    if not mon then return 0 end
+    local _, _, _, pixels = mod.exports.expBarProgress(mon, battle.data or Game.data)
+    return pixels
+  end
+
+  -- Effective color for the EXP bar (crisp black).
+  mod.exports.expBarColor = function(battle)
+    return { 0, 0, 0, 1 }
+  end
+
+  -- Update animated EXP bar state across frames (handles gain interpolation,
+  -- multi-level level-ups, and mon switching).
+  mod.exports.updateExpBar = function(battle, dt)
+    local mon = battle and battle.player and battle.player.mon
+    if not mon then
+      battle._qolExpBarState = nil
+      return
+    end
+
+    local targetPixels = mod.exports.expBarPixels(battle)
+    local state = battle._qolExpBarState
+    if not state or state.mon ~= mon then
+      battle._qolExpBarState = {
+        mon = mon,
+        level = mon.level or 1,
+        pixels = targetPixels,
+      }
+      return
+    end
+
+    local step = (dt or (1 / 60)) * EXP_BAR_SPEED
+    local currentLevel = mon.level or 1
+
+    if currentLevel > state.level then
+      -- Level up: animate fill to full bar (EXP_BAR_WIDTH), then wrap to 0 for the next level
+      if state.pixels < EXP_BAR_WIDTH then
+        state.pixels = math.min(EXP_BAR_WIDTH, state.pixels + step)
+      else
+        state.level = state.level + 1
+        state.pixels = 0
+      end
+    elseif currentLevel < state.level then
+      -- Level dropped or reset
+      state.level = currentLevel
+      state.pixels = targetPixels
+    else
+      -- Same level: animate towards target pixels
+      if state.pixels < targetPixels then
+        state.pixels = math.min(targetPixels, state.pixels + step)
+      elseif state.pixels > targetPixels then
+        state.pixels = math.max(targetPixels, state.pixels - step)
+      end
+    end
+  end
+
+  -- Draw the EXP bar onto the battle HUD (fills right-to-left inside the bottom border groove).
+  mod.exports.drawExpBar = function(battle)
+    if not (love and love.graphics) then return end
+    if not (battle and battle.player and battle.player.mon) then return end
+    if battle.safari or battle.demo or battle.showPlayerBack then return end
+    if battle.blankForAskName then return end
+    if battle.introSlide and battle.introSlide ~= 0 then return end
+
+    local state = battle._qolExpBarState
+    local mon = battle.player.mon
+    local px = (state and state.mon == mon and state.pixels)
+               or mod.exports.expBarPixels(battle)
+    px = math.max(0, math.min(EXP_BAR_WIDTH, math.floor(px or 0)))
+    if px <= 0 then return end
+
+    local x = EXP_BAR_RIGHT - px
+    local y = EXP_BAR_Y
+
+    local g = love.graphics
+    g.setShader()
+    g.setColor(0, 0, 0, 1)
+    g.rectangle("fill", x, y, px, EXP_BAR_HEIGHT)
+
+    local ok, PaletteFX = pcall(require, "src.render.PaletteFX")
+    if ok and PaletteFX and PaletteFX.markTrueColor then
+      PaletteFX.markTrueColor(x, y, px, EXP_BAR_HEIGHT)
+    end
+  end
+
+
   -- a poisoned mon at or below the damage threshold survives at 1 HP and
   -- its poison subsides (status cleared); returns the subsided mons so the
   -- caller can queue the message.  Gen 1 names the status "PSN"; Gold's
@@ -1683,12 +1920,12 @@ return function(mod)
     end
   end
 
-  -- QUICK NURSE (Gen 1): the whole nurse interaction replaced -- heal the
-  -- party, remember this center as the last-heal point, turn the player
-  -- away, and finish; no dialogue, no yes/no, no machine animation.  The
-  -- nurse still turns to face the player.  Pure enough for the headless
-  -- suite (Game.save stands in for the live save), exported so the wrap
-  -- is a three-line gate.
+  -- QUICK NURSE (Gen 1): talking to a Pokecenter nurse skips all dialogue
+  -- (welcome, yes/no, need pokemon, fighting fit, farewell), plays the heal
+  -- machine animation and jingle, heals the party, remembers this center as
+  -- the last-heal point, and turns the player away automatically.
+  -- The nurse still turns to the machine during healing and faces the player
+  -- when finished.
   mod.exports.quickNurse = function(self, onDone, npc)
     local save = Game.save
     if not (save and self and self.map and self.player) then
@@ -1706,9 +1943,49 @@ return function(mod)
         and { id = self.lastOutdoor.id, x = self.lastOutdoor.x,
               y = self.lastOutdoor.y } or nil,
     }
-    mod.exports.turnAround(self.player)
-    if npc then npc:facePlayer(self.player) end
-    if onDone then onDone() end
+
+    local okFollower, Follower = pcall(require, "src.world.PikachuFollower")
+    local function finish()
+      if okFollower and Follower and Follower.setVisible then
+        Follower.setVisible(self, true)
+      end
+      if npc and npc.facePlayer and self.player then
+        npc:facePlayer(self.player)
+      end
+      mod.exports.turnAround(self.player)
+      if onDone then onDone() end
+    end
+
+    local function startMachine()
+      if npc then npc.facing = "left" end
+      if okFollower and Follower and Follower.setVisible then
+        Follower.setVisible(self, false)
+      end
+      local okMusic, Music = pcall(require, "src.core.Music")
+      if okMusic and Music and Music.stop then
+        Music.stop()
+      end
+      self.healAnim = {
+        balls = math.min(6, #(save.party or {})),
+        lit = 0,
+        timer = 0,
+        visible = true,
+        px = (self.player and self.player.cellX or 0) * 16,
+        py = (self.player and self.player.cellY or 0) * 16,
+        onDone = finish,
+      }
+      -- In headless tests or stubs where stepHealAnim is not driven by an update loop,
+      -- execute finish() immediately so test assertions complete.
+      if not (self.stepHealAnim or type(self.update) == "function") then
+        finish()
+      end
+    end
+
+    if okFollower and Follower and type(Follower.hopToCounter) == "function" and self.follower then
+      Follower.hopToCounter(self, startMachine)
+    else
+      startMachine()
+    end
     return true
   end
 
@@ -2211,6 +2488,64 @@ return function(mod)
     end
   end
 
+  -- PARTY SCROLL (Gen 1): Up/Down in the Summary / STATS screen cycles
+  -- through the player's party Pokémon, preserving the current page
+  -- (Stats or Moves/EXP), updating the front sprite and playing the cry.
+  mod.exports.summarySwitchMon = function(self, delta, party)
+    if not (self and self.mon and party and #party > 1 and delta and delta ~= 0) then
+      return false
+    end
+    local curIdx = nil
+    for i, mon in ipairs(party) do
+      if mon == self.mon then
+        curIdx = i
+        break
+      end
+    end
+    if not curIdx then return false end
+    local nextIdx = curIdx + delta
+    if nextIdx < 1 then
+      nextIdx = #party
+    elseif nextIdx > #party then
+      nextIdx = 1
+    end
+    if nextIdx == curIdx then return false end
+
+    local newMon = party[nextIdx]
+    if not newMon then return false end
+    self.mon = newMon
+
+    local game = self.game or Game
+    local data = game and game.data
+
+    if data and data.pokemon and newMon.species then
+      local okStats, Stats = pcall(require, "src.pokemon.Stats")
+      if okStats and Stats and Stats.ensure then
+        Stats.ensure(data.pokemon[newMon.species], newMon)
+      end
+
+      local okSprites, Sprites = pcall(require, "src.pokemon.Sprites")
+      if okSprites and Sprites and Sprites.path and love and love.graphics and love.graphics.newImage then
+        local path, trueColor = Sprites.path(data, newMon.species, "front",
+          { mon = newMon, kind = "summary" })
+        if path then
+          local ok, img = pcall(love.graphics.newImage, path)
+          self.sprite = ok and img or nil
+        else
+          self.sprite = nil
+        end
+        self.spriteTrueColor = self.sprite and trueColor or false
+      end
+
+      local okSound, Sound = pcall(require, "src.core.Sound")
+      if okSound and Sound and Sound.playCry then
+        Sound.playCry(data, newMon.species)
+      end
+    end
+
+    return true
+  end
+
   -- one wrap per session; hot reload re-runs entry chunks.  The guards hang
   -- off the Game module (the shared singleton on Gen 1); a test that loads
   -- the mod twice in one process must clear them between loads.
@@ -2240,6 +2575,7 @@ return function(mod)
       "src.world.Player", "src.world.gen2.StepEvents", "src.world.gen2.World",
       "src.world.gen2.Player", "src.battle.gen2.Catching",
       "src.pokemon.Pokemon", "src.battle.gen2.Mon",
+      "src.battle.BattleState", "src.ui.SummaryMenu",
     }
     for _, name in ipairs(names) do
       local ok, module = pcall(require, name)
@@ -2751,6 +3087,82 @@ return function(mod)
     end
   end
 
+  -- EXP BAR: render a Gen 2-style EXP bar under the player's HP bar in Gen 1
+  -- battles, animated as EXP is earned. Supports 2D, wide mode and Dramatic Shape 3D.
+  if not GEN2 and not Game._qolTogglesExpBarInstalled then
+    Game._qolTogglesExpBarInstalled = true
+
+    if type(BattleState.drawHUDs) == "function" then
+      local vanillaDrawHUDs = BattleState.drawHUDs
+      BattleState.drawHUDs = function(self, ...)
+        local r1, r2 = vanillaDrawHUDs(self, ...)
+        if get("exp_bar") then
+          self._qolExpBarHudDrawn = true
+          love.graphics.push("all")
+          pcall(mod.exports.drawExpBar, self)
+          love.graphics.pop()
+        end
+        return r1, r2
+      end
+    end
+
+    mod.events:on("battle.started", function(ev)
+      local battle = ev and ev.battle
+      if not battle then return end
+      if type(battle.drawHUDs) == "function" and not battle._qolExpBarHUDsWrapped then
+        battle._qolExpBarHUDsWrapped = true
+        local instanceDrawHUDs = battle.drawHUDs
+        battle.drawHUDs = function(self, ...)
+          local r1, r2 = instanceDrawHUDs(self, ...)
+          if get("exp_bar") then
+            self._qolExpBarHudDrawn = true
+            love.graphics.push("all")
+            pcall(mod.exports.drawExpBar, self)
+            love.graphics.pop()
+          end
+          return r1, r2
+        end
+      end
+      if type(battle.draw) == "function" and not battle._qolExpBarDrawWrapped then
+        battle._qolExpBarDrawWrapped = true
+        local instanceDraw = battle.draw
+        battle.draw = function(self, ...)
+          local r1, r2 = instanceDraw(self, ...)
+          if get("exp_bar") and not self._qolExpBarHudDrawn then
+            love.graphics.push("all")
+            pcall(mod.exports.drawExpBar, self)
+            love.graphics.pop()
+          end
+          self._qolExpBarHudDrawn = nil
+          return r1, r2
+        end
+      end
+    end)
+
+    local vanillaDraw = BattleState.draw
+    if type(vanillaDraw) == "function" then
+      BattleState.draw = function(self, ...)
+        local r1, r2 = vanillaDraw(self, ...)
+        if get("exp_bar") and not self._qolExpBarHudDrawn then
+          love.graphics.push("all")
+          pcall(mod.exports.drawExpBar, self)
+          love.graphics.pop()
+        end
+        self._qolExpBarHudDrawn = nil
+        return r1, r2
+      end
+    end
+
+    local vanillaUpdate = BattleState.update
+    BattleState.update = function(self, dt)
+      if get("exp_bar") then
+        mod.exports.updateExpBar(self, dt)
+      end
+      return vanillaUpdate(self, dt)
+    end
+  end
+
+
   -- Long row labels ticker: OptionRows.draw has no clip (a label wider
   -- than the box bleeds over its border), so the wrap blanks ticker rows
   -- for the vanilla pass and redraws their label itself, scissored to the
@@ -2957,17 +3369,17 @@ return function(mod)
     end
   end)
 
-  -- QUICK NURSE: talking to a Pokecenter nurse heals instantly -- no
-  -- dialogue, no machine animation -- and the player turns away by
-  -- himself.  Gen 1's nurse is the overworld's own TX_SCRIPT flow
-  -- (nurseHeal: welcome, yes/no, machine, farewell), so the whole
-  -- interaction is replaced by the pure quickNurse export; the Pewter
-  -- Pikachu sleep beat is a story scene rather than a heal and keeps the
-  -- vanilla dialogue.  Gold's nurse is a ROM map script every Pokecenter
-  -- shares (PokecenterNurseScript), so the A-press dispatch
-  -- (World:interactBody) is intercepted before the script can start --
-  -- the counter-doubled nurse lookup is the pure nurseAt export -- and
-  -- the party heals with no script at all.
+  -- QUICK NURSE: talking to a Pokecenter nurse skips all dialogue --
+  -- welcome, yes/no, need pokemon, fighting fit, farewell -- plays the
+  -- heal machine animation and sound, heals the party, and the player
+  -- turns away automatically.  Gen 1's nurse is the overworld's own
+  -- TX_SCRIPT flow (nurseHeal), so the interaction is replaced by the
+  -- quickNurse export; the Pewter Pikachu sleep beat is a story scene
+  -- rather than a heal and keeps the vanilla dialogue.  Gold's nurse is a
+  -- ROM map script every Pokecenter shares (PokecenterNurseScript), so the
+  -- A-press dispatch (World:interactBody) is intercepted before the script
+  -- can start -- the counter-doubled nurse lookup is the pure nurseAt
+  -- export -- playing the Pokecenter heal machine animation with no script text.
   mod.events:on("game.ready", function()
     if GEN2 then
       local World2 = require("src.world.gen2.World")
@@ -2985,7 +3397,15 @@ return function(mod)
             self.talkNpc = npc
             npc:facePlayer(self.player)
             self:healParty()
-            mod.exports.turnAround(self.player)
+            if type(self.startHealMachineAnim) == "function" then
+              self:startHealMachineAnim(0, function()
+                mod.exports.turnAround(self.player)
+                self.talkNpc = nil
+              end)
+            else
+              mod.exports.turnAround(self.player)
+              self.talkNpc = nil
+            end
             return true
           end
         end
@@ -3090,24 +3510,28 @@ return function(mod)
           local r1, r2 = next(game, viewport)
           local now = (love and love.timer and love.timer.getTime)
                       and love.timer.getTime() or os.clock()
-          local text = mod.exports.autoRepelToastText(now)
-          if not text then return r1, r2 end
+          local layout = mod.exports.toastLayout(autoRepelToast, now)
+          if not layout then
+            autoRepelToast = nil
+            return r1, r2
+          end
           local Font = require("src.render.Font")
           local g = love.graphics
-          local w = Font.width(text)
-          local bw = w + 16
-          local bx = math.floor((160 - bw) / 2)
-          local alpha = math.min(1, (autoRepelToast.expire - now) / 0.5)
           local vp = viewport or {}
           local sx = (vp.gameWidth or 160) / 160
           local sy = (vp.gameHeight or 144) / 144
           g.push()
           if vp.gameX and vp.gameY then g.translate(vp.gameX, vp.gameY) end
           g.scale(sx, sy)
-          g.setColor(1, 1, 1, alpha)
-          g.rectangle("fill", bx, 8, bw, 16)
-          g.setColor(0, 0, 0, alpha)
-          Font.draw(text, bx + 8, 12)
+          g.setColor(1, 1, 1, layout.alpha)
+          g.rectangle("fill", layout.x, layout.y, layout.w, layout.h)
+          g.setColor(0, 0, 0, layout.alpha)
+          if layout.overflow == 0 then
+            Font.draw(layout.text, layout.textX, layout.textY)
+          else
+            drawTickerLabel(Font, layout.text, layout.offset,
+                            layout.textX, layout.textY, layout.textW)
+          end
           g.setColor(1, 1, 1, 1)
           g.pop()
           return r1, r2
@@ -3237,19 +3661,22 @@ return function(mod)
         vanillaDrawUI(self)
         local now = (love and love.timer and love.timer.getTime)
                     and love.timer.getTime() or os.clock()
-        local text = mod.exports.autoRepelToastText(now)
-        if not text then return end
+        local layout = mod.exports.toastLayout(autoRepelToast, now)
+        if not layout then
+          autoRepelToast = nil
+          return
+        end
         local Font = require("src.render.Font")
         local g = love.graphics
-        local w = Font.width(text)
-        local bw = w + 16
-        local bx = math.floor((160 - bw) / 2)
-        -- fade out over the last half second of the window
-        local alpha = math.min(1, (autoRepelToast.expire - now) / 0.5)
-        g.setColor(1, 1, 1, alpha)
-        g.rectangle("fill", bx, 8, bw, 16)
-        g.setColor(0, 0, 0, alpha)
-        Font.draw(text, bx + 8, 12)
+        g.setColor(1, 1, 1, layout.alpha)
+        g.rectangle("fill", layout.x, layout.y, layout.w, layout.h)
+        g.setColor(0, 0, 0, layout.alpha)
+        if layout.overflow == 0 then
+          Font.draw(layout.text, layout.textX, layout.textY)
+        else
+          drawTickerLabel(Font, layout.text, layout.offset,
+                          layout.textX, layout.textY, layout.textW)
+        end
         g.setColor(1, 1, 1, 1)
       end
     end
@@ -3829,6 +4256,40 @@ return function(mod)
         box.qty = math.min(10, box.max)
       end
       return box
+    end
+  end
+
+  -- PARTY SCROLL (Gen 1): Up and Down in SummaryMenu (STATS screen) cycles
+  -- through the party without closing the screen, retaining the active page
+  -- (Stats or Moves/EXP), refreshing stats, sprite and cry.
+  if not GEN2 then
+    local okSumm, SummaryMenu = pcall(require, "src.ui.SummaryMenu")
+    if okSumm and SummaryMenu and not SummaryMenu._qolTogglesPartyScrollInstalled then
+      SummaryMenu._qolTogglesPartyScrollInstalled = true
+      local vanillaSummaryUpdate = SummaryMenu.update
+      SummaryMenu.update = function(self, dt)
+        if get("party_scroll") then
+          local input = self.game and self.game.input
+          if input then
+            local delta = 0
+            if input:wasPressed("up") then
+              delta = -1
+            elseif input:wasPressed("down") then
+              delta = 1
+            end
+            if delta ~= 0 then
+              local party = (self.game and self.game.save and self.game.save.party)
+                         or (Game and Game.save and Game.save.party)
+              if party and #party > 1 then
+                if mod.exports.summarySwitchMon(self, delta, party) then
+                  return
+                end
+              end
+            end
+          end
+        end
+        return vanillaSummaryUpdate(self, dt)
+      end
     end
   end
 end

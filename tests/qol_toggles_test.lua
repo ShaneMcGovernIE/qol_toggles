@@ -61,7 +61,7 @@ do
   for _, id in ipairs({ "quick_ssanne", "bulk_coins", "lights_on",
                         "mouse_cam_lock", "last_item", "auto_battler",
                         "free_great_ball", "bulk_mart",
-                        "forgettable_hms" }) do
+                        "forgettable_hms", "exp_bar" }) do
     T.eq(shown[id], nil, "gen 2 hides the gen1-only toggle " .. id)
   end
   T.eq(shown["poison_save"], true, "gen 2 keeps POISON SAVE")
@@ -73,6 +73,7 @@ do
   T.eq(shown["money_mult"], true, "gen 2 keeps MONEY MULT")
   T.eq(shown["quick_nurse"], true, "gen 2 keeps QUICK NURSE")
   T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
+  T.eq(shown["party_scroll"], true, "gen 2 keeps PARTY SCROLL")
   T.eq(ex2.visibleCount(true), #rows,
     "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
@@ -411,7 +412,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 38, "thirty-eight toggles in the submenu")
+T.eq(#rows, 40, "forty toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -456,6 +457,10 @@ T.eq(rows[35].id, "auto_battler", "toggle 35: Battle Palace auto battler")
 T.eq(rows[36].id, "map_location", "toggle 36: map location toast")
 T.eq(rows[37].id, "rename", "toggle 37: rename from the party menu")
 T.eq(rows[38].id, "modern_types", "toggle 38: modern type chart")
+T.eq(rows[39].id, "exp_bar", "toggle 39: battle EXP bar")
+T.eq(rows[39].label, "EXP BAR", "toggle 39: EXP BAR label")
+T.eq(rows[40].id, "party_scroll", "toggle 40: party scroll")
+T.eq(rows[40].label, "PARTY SCROLL", "toggle 40: PARTY SCROLL label")
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -561,6 +566,7 @@ T.eq(ex.defaultFor("map_location"), true, "MAP LOCATION ships ON")
 T.eq(ex.defaultFor("rename"), true, "RENAME ships ON")
 T.eq(ex.defaultFor("modern_types"), false, "MODERN TYPES ships OFF")
 T.eq(ex.defaultFor("quick_nurse"), false, "QUICK NURSE ships OFF")
+T.eq(ex.defaultFor("party_scroll"), true, "PARTY SCROLL ships ON")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
@@ -596,14 +602,19 @@ do
     { attacker = "WATER", defender = "FIRE", multiplier = 20 },
   }
   local modern = ex.modernTypeChart(fixtureChart)
-  T.eq(#modern, #fixtureChart, "modern chart keeps every row")
+  T.check(#modern >= #fixtureChart, "modern chart keeps every row and adds missing modern matchups")
   T.eq(modern[1].multiplier, 0, "unchanged rows keep their multiplier")
   T.eq(modern[2].multiplier, 5, "BUG>POISON drops to resisted")
   T.eq(modern[3].multiplier, 10, "POISON>BUG drops to neutral")
   T.eq(modern[4].multiplier, 20, "GHOST>PSYCHIC becomes super effective")
   T.eq(modern[5].multiplier, 20, "GHOST>GHOST is unchanged")
   T.eq(modern[6].multiplier, 20, "WATER>FIRE is unchanged")
-  T.same(ex.modernTypeChart({}), {}, "an empty chart stays empty (no FAIRY rows)")
+  local iceOnFireRow = nil
+  for _, r in ipairs(modern) do
+    if r.attacker == "ICE" and r.defender == "FIRE" then iceOnFireRow = r end
+  end
+  T.neq(iceOnFireRow, nil, "ICE>FIRE is present in modern chart")
+  T.eq(iceOnFireRow and iceOnFireRow.multiplier, 5, "ICE>FIRE is 5 (resisted by Fire)")
 
   -- the Gen VI Steel change rides the same overrides: no-op rows on a Gen 1
   -- chart (no STEEL there), the real fix on a Gold chart
@@ -612,9 +623,15 @@ do
     { attacker = "DARK", defender = "STEEL", multiplier = 5 },
     { attacker = "FIRE", defender = "STEEL", multiplier = 20 },
   })
-  T.eq(steel[1].multiplier, 10, "GHOST>STEEL becomes neutral")
-  T.eq(steel[2].multiplier, 10, "DARK>STEEL becomes neutral")
-  T.eq(steel[3].multiplier, 20, "FIRE>STEEL stays super effective")
+  local ghostSteel, darkSteel, fireSteel = nil, nil, nil
+  for _, r in ipairs(steel) do
+    if r.attacker == "GHOST" and r.defender == "STEEL" then ghostSteel = r end
+    if r.attacker == "DARK" and r.defender == "STEEL" then darkSteel = r end
+    if r.attacker == "FIRE" and r.defender == "STEEL" then fireSteel = r end
+  end
+  T.eq(ghostSteel and ghostSteel.multiplier, 10, "GHOST>STEEL becomes neutral")
+  T.eq(darkSteel and darkSteel.multiplier, 10, "DARK>STEEL becomes neutral")
+  T.eq(fireSteel and fireSteel.multiplier, 20, "FIRE>STEEL stays super effective")
 end
 
 -- the live chart follows the toggle: the engine's lookups move to the modern
@@ -634,6 +651,8 @@ do
     "vanilla: BUG is super effective on POISON")
   T.eq(TypeChart.effectiveness("GHOST", { "PSYCHIC_TYPE" }), 0,
     "vanilla: GHOST is immune to PSYCHIC (the Gen 1 bug)")
+  T.eq(TypeChart.effectiveness("ICE", { "FIRE" }), 10,
+    "vanilla: ICE is neutral against FIRE in Gen 1")
 
   -- the toggle flips the chart through the exported setter (the same path
   -- the menu's step uses); Game.save / writeOptions stay out of the way so
@@ -649,8 +668,12 @@ do
     "modern: POISON is neutral on BUG")
   T.eq(TypeChart.effectiveness("GHOST", { "PSYCHIC_TYPE" }), 20,
     "modern: GHOST hits PSYCHIC super effectively")
+  T.eq(TypeChart.effectiveness("ICE", { "FIRE" }), 5,
+    "modern: FIRE resists ICE")
   T.same(TypeChart.rows("BUG", { "POISON" }), { 5 },
     "modern: TypeChart.rows mirrors the swapped multiplier")
+  T.same(TypeChart.rows("ICE", { "FIRE" }), { 5 },
+    "modern: TypeChart.rows includes ICE on FIRE at 5")
 
   ex.set("modern_types", false)
   T.eq(run.loader.modOptions.qol_toggles.modern_types, false,
@@ -659,6 +682,8 @@ do
     "off again: the vanilla BUG>POISON row is back")
   T.eq(TypeChart.effectiveness("GHOST", { "PSYCHIC_TYPE" }), 0,
     "off again: GHOST is immune to PSYCHIC once more")
+  T.eq(TypeChart.effectiveness("ICE", { "FIRE" }), 10,
+    "off again: ICE is neutral on FIRE once more")
   local liveAfter = Game.data.type_chart.matchups
   T.eq(#liveAfter, #liveVanilla, "the live chart regains its row count")
   for i, row in ipairs(liveAfter) do
@@ -1905,6 +1930,9 @@ do
     "the outdoor anchor survives")
   T.eq(ow.player.facing, "down", "the player turns away automatically")
   T.eq(npc.faced, true, "the nurse turns to face the player")
+  T.neq(ow.healAnim, nil, "healAnim structure is created")
+  T.eq(ow.healAnim.balls, 1, "healAnim configures 1 Pokéball for party of 1")
+  T.eq(ow.healAnim.visible, true, "healAnim is visible")
 
   -- a degenerate call (no live save / no overworld) still finishes
   local done2 = 0
@@ -2802,6 +2830,43 @@ T.eq(ex.autoRepelToastText(600), "PALLET TOWN",
      "the toast shows while active")
 T.eq(ex.autoRepelToastText(602.5), nil, "and expires like AUTO-REPEL's")
 
+-- short toast layout: centered static box without ticker overflow
+do
+  local toast = { text = "PALLET TOWN", start = 600, expire = 602.5, duration = 2.5 }
+  local layout = ex.toastLayout(toast, 600)
+  T.neq(layout, nil, "toastLayout returns layout")
+  T.eq(layout.overflow, 0, "PALLET TOWN has 0 overflow")
+  T.eq(layout.offset, 0, "offset is 0 (static)")
+  T.eq(layout.w, 11 * 8 + 16, "box width is text + 16 padding")
+  T.eq(layout.alpha, 1, "full alpha at start")
+
+  local fading = ex.toastLayout(toast, 602.25)
+  T.eq(fading.alpha, 0.5, "fades out over the last 0.5s")
+end
+
+-- long toast layout (ROCK TUNNEL POKECENTER): ticker scroll and extended duration
+do
+  ex.setLocationToast("ROCK TUNNEL POKECENTER", 700)
+  T.eq(ex.autoRepelToastText(700), "ROCK TUNNEL POKECENTER", "long toast is active")
+  T.neq(ex.autoRepelToastText(705), nil, "long toast duration is extended to allow reading full ticker")
+
+  local toast = { text = "ROCK TUNNEL POKECENTER", start = 700, expire = 707, duration = 7 }
+  local lStart = ex.toastLayout(toast, 700)
+  T.neq(lStart, nil, "layout exists")
+  T.eq(lStart.w, 144, "long toast box clamps to max 144px")
+  T.eq(lStart.textW, 128, "interior text window is 128px")
+  T.eq(lStart.overflow, 48, "22 chars (176px) has 48px overflow over 128px")
+  T.eq(lStart.offset, 0, "holds at 0 during initial hold")
+
+  -- at t = 3.1s (1.5s into 3.0s scroll): offset = -24px
+  local lScroll = ex.toastLayout(toast, 703.1)
+  T.eq(lScroll.offset, -24, "scrolls horizontally across time")
+
+  -- at t = 5.0s (in end hold): offset = -48px
+  local lEnd = ex.toastLayout(toast, 705.0)
+  T.eq(lEnd.offset, -48, "holds at -48px at the end of the text")
+end
+
 -- ------- BULK COINS (the Game Corner clerk's quantity tiers)
 
 do
@@ -3362,5 +3427,164 @@ do
   Game.stack = savedStack
 end
 
+-- ------- BATTLE EXP BAR (Gen 2-style EXP bar in battle)
+
+do
+  T.eq(ex.EXP_BAR_X, 80, "EXP bar X coordinate is 80")
+  T.eq(ex.EXP_BAR_RIGHT, 147, "EXP bar right coordinate is 147")
+  T.eq(ex.EXP_BAR_WIDTH, 67, "EXP bar width is 67")
+  T.eq(ex.EXP_BAR_Y, 89, "EXP bar Y coordinate is 89")
+  T.eq(ex.EXP_BAR_HEIGHT, 2, "EXP bar height is 2")
+
+  -- Growth rate EXP calculation formulas
+  T.eq(ex.expForLevel("Fast", 1), 0, "Fast growth rate at level 1")
+  T.eq(ex.expForLevel("Fast", 5), 100, "Fast growth rate at level 5 (4 * 125 / 5)")
+  T.eq(ex.expForLevel("Fast", 10), 800, "Fast growth rate at level 10")
+  T.eq(ex.expForLevel("Medium Fast", 1), 1, "Medium Fast growth rate at level 1")
+  T.eq(ex.expForLevel("Medium Fast", 5), 125, "Medium Fast growth rate at level 5 (5^3)")
+  T.eq(ex.expForLevel("Medium Fast", 10), 1000, "Medium Fast growth rate at level 10")
+  T.eq(ex.expForLevel("Slow", 1), 1, "Slow growth rate at level 1")
+  T.eq(ex.expForLevel("Slow", 5), 156, "Slow growth rate at level 5 (5 * 125 / 4)")
+  T.eq(ex.expForLevel("Slow", 10), 1250, "Slow growth rate at level 10")
+  T.eq(ex.expForLevel("Medium Slow", 1), 0, "Medium Slow growth rate at level 1")
+  T.eq(ex.expForLevel("Medium Slow", 5), 135, "Medium Slow growth rate at level 5")
+
+  -- Progress calculation
+  local testData = {
+    pokemon = {
+      PIKACHU = { species = "PIKACHU", growthRate = "Medium Fast" },
+    },
+    constants = { levelCap = 100 },
+  }
+  local monLvl5 = { species = "PIKACHU", level = 5, exp = 125 }
+  local prog, needed, frac, pixels = ex.expBarProgress(monLvl5, testData)
+  T.eq(prog, 0, "0 progress EXP at start of level 5")
+  T.eq(needed, 91, "91 EXP needed from level 5 (125) to level 6 (216)")
+  T.eq(frac, 0, "0 fraction at start of level 5")
+  T.eq(pixels, 0, "0 pixels at start of level 5")
+
+  monLvl5.exp = 170
+  prog, needed, frac, pixels = ex.expBarProgress(monLvl5, testData)
+  T.eq(prog, 45, "45 progress EXP (170 - 125)")
+  T.check(math.abs(frac - (45 / 91)) < 1e-6, "fraction matches 45/91")
+  T.eq(pixels, math.floor(45 / 91 * 67), "33 pixels for ~49.4% progress")
+
+  local monLvl100 = { species = "PIKACHU", level = 100, exp = 1000000 }
+  prog, needed, frac, pixels = ex.expBarProgress(monLvl100, testData)
+  T.eq(frac, 1.0, "level 100 is 100% full")
+  T.eq(pixels, 67, "level 100 renders all 67 pixels")
+
+  -- Target pixels for battle
+  local stubBattle = {
+    data = testData,
+    player = { mon = monLvl5 },
+  }
+  T.eq(ex.expBarPixels(stubBattle), 33, "battle extracts player mon pixel fill")
+  T.same(ex.expBarColor(stubBattle), { 0, 0, 0, 1 }, "default EXP bar color is black")
+
+  -- Animation state updates
+  ex.updateExpBar(stubBattle, 0.1)
+  T.neq(stubBattle._qolExpBarState, nil, "updateExpBar creates state")
+  T.eq(stubBattle._qolExpBarState.pixels, 33, "initializes at target pixels on first see")
+  T.eq(stubBattle._qolExpBarState.level, 5, "initializes at current level")
+
+  -- Mon gains EXP in battle
+  monLvl5.exp = 200 -- target becomes math.floor(75 / 91 * 67) = 55
+  local target = ex.expBarPixels(stubBattle)
+  T.eq(target, 55, "new target is 55 pixels")
+  stubBattle._qolExpBarState.pixels = 33
+  ex.updateExpBar(stubBattle, 0.25) -- dt = 0.25s, speed = 40px/s => step = 10px
+  T.eq(stubBattle._qolExpBarState.pixels, 43, "smoothly steps 10px towards target")
+
+  -- Level up animation wrap
+  monLvl5.level = 6
+  monLvl5.exp = 220 -- level 6 min is 216, level 7 is 343
+  stubBattle._qolExpBarState.pixels = 63
+  stubBattle._qolExpBarState.level = 5
+  ex.updateExpBar(stubBattle, 0.25) -- step = 10px, exceeds 67 -> wraps
+  T.eq(stubBattle._qolExpBarState.pixels, 67, "clamps to 67 before level rollover")
+  ex.updateExpBar(stubBattle, 0.1)
+  T.eq(stubBattle._qolExpBarState.level, 6, "level rolls over to 6")
+  T.eq(stubBattle._qolExpBarState.pixels, 0, "pixels reset to 0 for the new level")
+
+  -- Switching mons resets immediately
+  local switchedMon = { species = "PIKACHU", level = 10, exp = 1000 }
+  stubBattle.player.mon = switchedMon
+  ex.updateExpBar(stubBattle, 0.1)
+  T.eq(stubBattle._qolExpBarState.mon, switchedMon, "switching mon updates state.mon")
+  T.eq(stubBattle._qolExpBarState.level, 10, "switched mon level takes effect immediately")
+  T.eq(stubBattle._qolExpBarState.pixels, 0, "switched mon target pixels initialized")
+
+  -- Draw calls
+  local drawnRect = nil
+  local drawnColor = nil
+  local mockLove = {
+    graphics = {
+      setShader = function() end,
+      getColor = function() return 1, 1, 1, 1 end,
+      setColor = function(r, g, b, a) drawnColor = { r, g, b, a } end,
+      rectangle = function(mode, x, y, w, h)
+        drawnRect = { mode = mode, x = x, y = y, w = w, h = h }
+      end,
+    },
+  }
+  local savedLove = _G.love
+  _G.love = mockLove
+  stubBattle._qolExpBarState.pixels = 35
+  ex.drawExpBar(stubBattle)
+  T.same(drawnColor, { 0, 0, 0, 1 }, "drawExpBar draws in black")
+  T.same(drawnRect, { mode = "fill", x = 112, y = 89, w = 35, h = 2 },
+         "drawExpBar renders fill from right to left at (112, 89, 35, 2)")
+  _G.love = savedLove
+end
+
+-- ------------------------------------------------ PARTY SCROLL
+do
+  local Pokemon = require("src.pokemon.Pokemon")
+  local mon1 = Pokemon.new(Data, "FIXMON_A", 10)
+  local mon2 = Pokemon.new(Data, "FIXMON_B", 15)
+  local mon3 = Pokemon.new(Data, "FIXMON_C", 20)
+  local party = { mon1, mon2, mon3 }
+
+  local screen = {
+    game = { data = Data, save = { party = party } },
+    mon = mon1,
+    page = 1,
+  }
+
+  -- Up from 1 wraps to 3, preserving page 1
+  local ok = ex.summarySwitchMon(screen, -1, party)
+  T.eq(ok, true, "Up scrolls backward with wrapping")
+  T.eq(screen.mon, mon3, "mon is now mon3")
+  T.eq(screen.page, 1, "page is preserved as page 1")
+
+  -- Down from 3 wraps to 1, preserving page 2
+  screen.page = 2
+  ok = ex.summarySwitchMon(screen, 1, party)
+  T.eq(ok, true, "Down scrolls forward with wrapping")
+  T.eq(screen.mon, mon1, "mon is now mon1")
+  T.eq(screen.page, 2, "page is preserved as page 2")
+
+  -- Down from 1 moves to 2
+  ok = ex.summarySwitchMon(screen, 1, party)
+  T.eq(ok, true, "Down moves to mon2")
+  T.eq(screen.mon, mon2, "mon is now mon2")
+  T.eq(screen.page, 2, "page remains page 2")
+
+  -- Up from 2 moves to 1
+  ok = ex.summarySwitchMon(screen, -1, party)
+  T.eq(ok, true, "Up moves to mon1")
+  T.eq(screen.mon, mon1, "mon is now mon1")
+  T.eq(screen.page, 2, "page remains page 2")
+
+  -- Degenerate cases
+  T.eq(ex.summarySwitchMon(screen, 0, party), false, "delta 0 is rejected")
+  T.eq(ex.summarySwitchMon(screen, 1, { mon1 }), false, "single mon party does not switch")
+  T.eq(ex.summarySwitchMon(nil, 1, party), false, "nil screen is rejected")
+  T.eq(ex.summarySwitchMon(screen, 1, nil), false, "nil party is rejected")
+end
+
 run.release()
 T.finish("qol_toggles")
+
+

@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.26.0] - 2026-08-19
+
+### Added
+
+- PARTY SCROLL: a new toggle allowing the player to press Up and Down in the
+  Pokémon STATS / Summary screen (`SummaryMenu`) to cycle through party
+  Pokémon without closing the screen, updating the sprite, stats and cry while
+  retaining the active page (Page 1: Stats, Page 2: Moves & EXP). Ships ON.
+- EXP BAR: a new toggle rendering an animated, Gen 2-style battle experience
+  bar below the player's HP bar in Gen 1 battles, filling the arrow/underline
+  groove in solid black as the active Pokémon earns EXP towards its next level.
+  Smoothly animates during battle, loops through level-ups, and shows a full
+  bar at Level 100. Ships OFF (Gen 1 only; Gold natively renders its own EXP bar).
+- MAP LOCATION: added horizontal ticker text and extended display duration
+  for long map and building names (like ROCK TUNNEL POKECENTER) that exceed
+  the toast window width.
+
+### Changed
+
+- QUICK NURSE: updated to play the healing machine animation and sound while
+  skipping all dialogue (welcome, yes/no prompt, fighting fit, farewell), then
+  automatically turning the player away from the counter.
+- MODERN TYPES: fixed Fire resisting Ice (Ice vs Fire = 0.5x resisted) in
+  Gen 1, injecting the modern matchup row into the type chart.
+
 ## [1.24.1] - 2026-08-16
 
 ### Fixed

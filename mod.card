@@ -1,7 +1,7 @@
 -- Sharing metadata.  Read by tooling and the manager detail pane; never by
 -- the loader's merge.
 return {
-  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, selectable EXP and money multipliers (0x, 1.5x, 2x, 3x or 4x), Battle Palace-style auto battling from Gen 1 DVs and stat EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, an auto turn-away after the nurse heals, an instant no-dialogue quick nurse, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, hold-B running, and on-the-fly renaming from the party menu. Works on Red/Blue/Yellow and Gold.",
+  summary = "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), no badge gates, reusable TMs, forgettable HMs, always-catch, perfect DVs, selectable EXP and money multipliers (0x, 1.5x, 2x, 3x or 4x), Battle Palace-style auto battling from Gen 1 DVs and stat EXP, instant flee, a battle cursor that remembers where it was, no encounter dupes, instant fishing, post-battle heals, an auto turn-away after the nurse heals, a no-dialogue quick nurse, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, hold-B running, a Gen 2-style battle EXP bar, and on-the-fly renaming from the party menu. Works on Red/Blue/Yellow and Gold.",
   author = "Shane",
   tags = { "quality-of-life", "options", "toggles" },
   differences = {
@@ -40,17 +40,19 @@ return {
       "a RUN (HOLD B) switch doubles foot speed while B is held, off the bike and off the surfboard",
       "a MOUSE CAM LOCK switch stops Dramatic Shape's battle camera following the mouse (stick, drag and zoom still work)",
       "an AUTO BATTLER switch makes the player's Pokémon choose moves in Battle Palace style, mapping Gen 1 DVs and stat EXP to an approximate Palace style; low HP latches until switch-out; an empty category falls back to a usable move instead of the Emerald 50% turn-skip, and out of PP the Pokémon Struggles like vanilla; disabling the toggle preserves the original action",
+      "an EXP BAR switch renders a Gen 2-style EXP bar below the player's HP bar in battle, filling the arrow/underline groove in black as EXP is earned",
       "a MAP LOCATION switch toasts the name of the area when the player enters a new map, in the AUTO-REPEL banner style, with corrected names where the town map data lies (the Route 10 PokeCenter reads as ROCK TUNNEL there)",
       "a RENAME row in the party submenu opens the naming screen for the selected Pokémon so it can be renamed on the fly (the current name pre-fills; an empty or unchanged confirm keeps it); the row stays out of battle and off eggs, and when the eight-row submenu box is full the CANCEL row (then the last field-move row) gives up its seat so RENAME is always visible",
-      "a QUICK NURSE switch replaces the whole Pokecenter nurse interaction with an instant heal -- no welcome dialogue, no yes/no, no machine animation -- and turns the player away automatically; the center is still remembered as the last-heal point, the Pewter Pikachu sleep scene keeps its vanilla dialogue, and on Gold the shared PokecenterNurseScript is intercepted at the A-press dispatch so no script runs at all",
+      "a QUICK NURSE switch skips all Pokecenter nurse dialogue -- no welcome, no yes/no, no farewell -- playing the heal machine animation and turning the player away automatically; the center is still remembered as the last-heal point, the Pewter Pikachu sleep scene keeps its vanilla dialogue, and on Gold the shared PokecenterNurseScript plays the heal machine special without running script dialogue",
+      "a PARTY SCROLL switch allows pressing Up and Down on the STATS screen to cycle through party Pokémon without closing the screen, retaining the active page (Stats or Moves/EXP)",
     },
     added = {
       "a QOL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
     },
     known = {
-      "On Gold, the Gen 1-cart-only toggles (QUICK S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M), AUTO BATTLER, POKEBALL BONUS, BULK MART, FORGETTABLE HMs) do not appear in the submenu -- Gold's mart, battle-item and HM-forget APIs have no honest equivalent yet.  The rest behave the same on both generations",
+      "On Gold, the Gen 1-cart-only toggles (QUICK S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M), AUTO BATTLER, EXP BAR, POKEBALL BONUS, BULK MART, FORGETTABLE HMs) do not appear in the submenu -- Gold's mart, battle-item and HM-forget APIs have no honest equivalent yet, and Gold already renders a native EXP bar in battle.  The rest behave the same on both generations",
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION and RENAME ship ON; the other twenty-six, including AUTO BATTLER, B FOR QUICK FLEE and TURN AWAY (NURSE), ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION, RENAME and PARTY SCROLL ship ON; the other twenty-eight, including AUTO BATTLER, EXP BAR, B FOR QUICK FLEE and TURN AWAY (NURSE), ship OFF.  Toggles persist in options.lua, independent of save files",
       "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",
       "AUTO CUT only fires when a party mon knows CUT (FIELD MOVES ALL does not extend to it), and the step is consumed by the cut text + animation",
       "NO ENCOUNTER DUPES is session-scoped, so a restart forgets the last species",

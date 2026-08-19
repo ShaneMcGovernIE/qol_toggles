@@ -9,6 +9,10 @@ local Runtime = require("src.mods.Runtime")
 local Data = require("src.core.Data")
 local Game = require("src.core.Game")
 local vanillaGamepadDispatch = Game.gamepadpressed
+-- captured before the mod loads so the suite can assert the INSTANT TEXT
+-- wrap is installed over the shared TextBox typewriter
+local TextBoxModule = require("src.render.TextBox")
+local vanillaTextBoxUpdate = TextBoxModule.update
 Data:load()
 -- the ROM-derived cache has no FIX_* species or moves, but this suite
 -- builds real mons through Pokemon.new(Data, "FIXMON_A", ...): register
@@ -74,6 +78,8 @@ do
   T.eq(shown["quick_nurse"], true, "gen 2 keeps QUICK NURSE")
   T.eq(shown["unlimited_tms"], true, "gen 2 keeps UNLIMITED TMs")
   T.eq(shown["party_scroll"], true, "gen 2 keeps PARTY SCROLL")
+  T.eq(shown["instant_text"], true, "gen 2 keeps INSTANT TEXT")
+  T.eq(shown["hold_to_scroll"], true, "gen 2 keeps HOLD TO SCROLL")
   T.eq(ex2.visibleCount(true), #rows,
     "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
@@ -325,6 +331,8 @@ local run = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
 T.eq(#run.errors, 0, "loads clean (" .. tostring(run.errors[1]) .. ")")
 local ex = run.loader.exports.qol_toggles
 T.neq(ex, nil, "exports reachable")
+T.neq(TextBoxModule.update, vanillaTextBoxUpdate,
+  "INSTANT TEXT wraps the shared TextBox update")
 
 -- the toggles read through Game.mods (the loader), which the headless
 -- harness does not wire by itself
@@ -412,7 +420,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 40, "forty toggles in the submenu")
+T.eq(#rows, 42, "forty-two toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -461,6 +469,10 @@ T.eq(rows[39].id, "exp_bar", "toggle 39: battle EXP bar")
 T.eq(rows[39].label, "EXP BAR", "toggle 39: EXP BAR label")
 T.eq(rows[40].id, "party_scroll", "toggle 40: party scroll")
 T.eq(rows[40].label, "PARTY SCROLL", "toggle 40: PARTY SCROLL label")
+T.eq(rows[41].id, "instant_text", "toggle 41: instant text")
+T.eq(rows[41].label, "INSTANT TEXT", "toggle 41: INSTANT TEXT label")
+T.eq(rows[42].id, "hold_to_scroll", "toggle 42: hold to scroll")
+T.eq(rows[42].label, "HOLD TO SCROLL", "toggle 42: HOLD TO SCROLL label")
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -567,7 +579,53 @@ T.eq(ex.defaultFor("rename"), true, "RENAME ships ON")
 T.eq(ex.defaultFor("modern_types"), false, "MODERN TYPES ships OFF")
 T.eq(ex.defaultFor("quick_nurse"), false, "QUICK NURSE ships OFF")
 T.eq(ex.defaultFor("party_scroll"), true, "PARTY SCROLL ships ON")
+T.eq(ex.defaultFor("instant_text"), false, "INSTANT TEXT ships OFF")
+T.eq(ex.defaultFor("hold_to_scroll"), false, "HOLD TO SCROLL ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
+-- ------------------------------------------------ HOLD TO SCROLL
+
+-- holdNav is the shared hold-to-repeat helper the toggle drives the generic
+-- Gen 1 Menu, both OPTIONS screens and the QOL TOGGLES submenu with.  It
+-- never returns on the edge-press frame (the vanilla update moved already),
+-- then repeats the held direction after `delay` held frames every `rate`,
+-- and cancels on any A/B edge or when the direction releases.
+local function holdInput()
+  local held = {}
+  local pressed
+  return {
+    edge = function(_, k) pressed = k end,
+    setDown = function(_, k) held[k] = true end,
+    setUp = function(_, k) held[k] = nil end,
+    wasPressed = function(_, k)
+      local v = pressed == k
+      if v then pressed = nil end
+      return v
+    end,
+    isDown = function(_, k) return held[k] == true end,
+  }
+end
+do
+  local menu = { items = { 1, 2, 3 }, index = 1 }
+  local input = holdInput()
+  input:edge("up")
+  T.eq(ex.holdNav(menu, input), nil,
+    "holdNav stays silent on the edge-press frame (vanilla already moved)")
+  input:setDown("up")
+  local fired
+  for f = 1, 20 do
+    fired = ex.holdNav(menu, input)
+    if fired then break end
+  end
+  T.eq(fired, "up", "holdNav repeats a held Up after the hold delay")
+  input:setUp("up")
+  T.eq(ex.holdNav(menu, input), nil,
+    "holdNav clears when the direction releases")
+  input:setDown("down")
+  input:edge("down")
+  ex.holdNav(menu, input) -- arm the down hold on its edge frame
+  input:edge("a")
+  T.eq(ex.holdNav(menu, input), nil, "holdNav cancels on an A edge")
+end
 
 T.eq(ex.enabledCount(function(k) return state[k] end), 0, "stub state starts empty")
 

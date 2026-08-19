@@ -62,6 +62,10 @@
 --                      go neutral, STEEL stops resisting GHOST and DARK
 --   EXP BAR            Gen 2-style EXP bar below the player's HP bar in
 --                      battle (fills the arrow/underline groove in black)
+--   INSTANT TEXT       dialogue and menus type every glyph out at once,
+--                      no matter the TEXT SPEED setting
+--   HOLD TO SCROLL     hold Up/Down (and Left/Right on the card grid) to
+--                      keep stepping a menu instead of tapping
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -377,6 +381,10 @@ local TOGGLES = {
     help = "Gen 2-style EXP\nbar under the\nplayer's HP bar\nin battle.\vFills the arrow\nline with your\nprogress to the\nnext level." },
   { key = "party_scroll", label = "PARTY SCROLL", default = true,
     help = "In the STATS screen,\nUp/Down cycles your\nparty POKéMON.\vRetains the page\n(Stats or Moves)\nyou are on." },
+  { key = "instant_text", label = "INSTANT TEXT", default = false,
+    help = "All dialogue and\nmenus type out\ninstantly, no\nmatter your TEXT\nSPEED setting.\vPages still\ngate on A." },
+  { key = "hold_to_scroll", label = "HOLD TO SCROLL", default = false,
+    help = "Hold Up or Down\nin a menu to\nkeep scrolling\ninstead of\ntapping.\vLists, options\nand this menu." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -2571,7 +2579,8 @@ return function(mod)
     local names = {
       "src.inventory.ItemEffects", "src.ui.MoveLearnMenu",
       "src.ui.PartyMenu", "src.battle.Catching", "src.ui.ShopMenu",
-      "src.ui.ListMenu", "src.ui.QuantityBox", "src.world.OverworldController",
+      "src.ui.Menu", "src.ui.ListMenu", "src.ui.QuantityBox",
+      "src.world.OverworldController",
       "src.world.Player", "src.world.gen2.StepEvents", "src.world.gen2.World",
       "src.world.gen2.Player", "src.battle.gen2.Catching",
       "src.pokemon.Pokemon", "src.battle.gen2.Mon",
@@ -2915,6 +2924,15 @@ return function(mod)
       end
     elseif input:wasPressed("b") then
       self:exit()
+    elseif get("hold_to_scroll") then
+      -- HOLD TO SCROLL: keep stepping the card grid while a direction is
+      -- held.  holdNav is exported (assigned once the entry chunk has run),
+      -- so it is live whenever the menu updates; it never returns on the
+      -- edge-press frame itself, so the vanilla gridMove above stays the
+      -- single mover for that frame.
+      local dir = mod.exports.holdNav(self, input,
+                                      { dirs = { "up", "down", "left", "right" } })
+      if dir then self.index = gridMove(self.index, dir, #rows) end
     end
   end
 
@@ -4100,6 +4118,148 @@ return function(mod)
   -- inline), while Gen 2's PartyMenu builds its list through buildSubmenuItems
   -- and passes it through the ui.party.submenu hook, so the phantom rows are
   -- added to that list instead (the else arm below).
+  -- ----------------------------------------------------- INSTANT TEXT
+
+  -- The engine types dialogue one glyph per frame at the player's TEXT
+  -- SPEED setting (holding A/B fast-forwards to one glyph per frame);
+  -- this toggle types the whole current section out at once instead, no
+  -- matter the TEXT SPEED setting.  The down-arrow / page prompts still
+  -- gate on A like the cart.  One wrap over the shared TextBox (Red and
+  -- Gold both type through src/render/TextBox.lua): before the vanilla
+  -- typewriter runs, a box that still has glyphs to print gets its char
+  -- timer jumped far enough that the vanilla loop drains the current line
+  -- -- and any following lines, up to the next down-arrow or the end of
+  -- the section -- in a single frame.
+  local TextBox = require("src.render.TextBox")
+  if not Game._qolTogglesInstantTextInstalled then
+    Game._qolTogglesInstantTextInstalled = true
+    local vanillaUpdate = TextBox.update
+    TextBox.update = function(self, dt)
+      if get("instant_text")
+         and not self.done
+         and not self.waiting
+         and (self.holdFrames or 0) <= 0
+         and self.charIndex < #(self.codes or {}) then
+        self.charTimer = (self.charTimer or 0) + 100000
+      end
+      return vanillaUpdate(self, dt)
+    end
+  end
+
+  -- -------------------------------------------------- HOLD TO SCROLL
+
+  -- Menus step one row per button edge; this adds a hold-to-repeat on the
+  -- scroll directions.  holdNav is called AFTER a menu's own update has
+  -- already consumed this frame's edge press, so it never returns on the
+  -- edge-press frame itself (that stays the vanilla update's single move)
+  -- and only fires repeats once the key has been held past `delay` frames,
+  -- then every `rate` frames -- the same pacing as the engine's own
+  -- ListMenu keyRepeat.  Returning nil on any A/B edge stops a repeat from
+  -- firing on the frame a menu acts, so a held direction can't nudge the
+  -- cursor while you confirm.
+  local function holdNav(menu, input, opts)
+    opts = opts or {}
+    for _, d in ipairs(opts.dirs or { "up", "down" }) do
+      if input:wasPressed(d) then
+        menu._qolHoldDir = d
+        menu._qolHoldFrames = 0
+        return nil
+      end
+    end
+    local dir = menu._qolHoldDir
+    if not dir or not input:isDown(dir)
+       or input:wasPressed("a") or input:wasPressed("b") then
+      menu._qolHoldDir, menu._qolHoldFrames = nil, 0
+      return nil
+    end
+    menu._qolHoldFrames = (menu._qolHoldFrames or 0) + 1
+    local after = menu._qolHoldFrames - (opts.delay or 16)
+    if after >= 0 and after % (opts.rate or 4) == 0 then return dir end
+    return nil
+  end
+  mod.exports.holdNav = holdNav
+
+  -- Lists (bag, shop, box, dex) on both generations: the engine's ListMenu
+  -- -- and Gold's ScriptMenu, which shares the same ui.list_menu hook --
+  -- already implement hold-to-scroll behind an opt-in keyRepeat; the
+  -- toggle turns it on for every list.
+  mod.hooks:wrap("ui.list_menu", function(next, opts, ctx)
+    local out = next(opts, ctx)
+    if get("hold_to_scroll") then
+      if type(out) == "table" then
+        out.keyRepeat = true
+      else
+        out = { keyRepeat = true }
+      end
+    end
+    return out
+  end)
+
+  -- the generic Gen 1 Menu boxes (start menu, USE/TOSS, box actions).  The
+  -- name is built at runtime so gen2check does not flag a Gen 1-only module
+  -- that never loads under Gold (which has its own ScriptMenu, already
+  -- hold-scrollable through the ui.list_menu hook above).
+  if not GEN2 then
+    local Menu = require("src" .. ".ui.Menu")
+    if not Menu._qolTogglesHoldScrollInstalled then
+      Menu._qolTogglesHoldScrollInstalled = true
+      local vanillaUpdate = Menu.update
+      Menu.update = function(self, dt)
+        vanillaUpdate(self, dt)
+        if get("hold_to_scroll") then
+          local dir = holdNav(self, self.game.input)
+          if dir == "up" then
+            self.index = self.index > 1 and self.index - 1 or #self.items
+          elseif dir == "down" then
+            self.index = self.index < #self.items and self.index + 1 or 1
+          end
+          if dir then self:clampScroll() end
+        end
+      end
+    end
+  end
+
+  -- the OPTIONS screen on both generations (Gold's owns its rows and scroll
+  -- independently of Gen 1's)
+  if not Game._qolTogglesHoldOptionsInstalled then
+    Game._qolTogglesHoldOptionsInstalled = true
+    if GEN2 then
+      local OptionsMenu2 = require("src.ui.gen2.OptionsMenu")
+      local vanillaUpdate = OptionsMenu2.update
+      OptionsMenu2.update = function(self, dt)
+        vanillaUpdate(self, dt)
+        if get("hold_to_scroll") then
+          local dir = holdNav(self, self.game.input)
+          if dir == "up" then
+            self.index = self.index > 1 and self.index - 1 or #self.rows
+          elseif dir == "down" then
+            self.index = self.index < #self.rows and self.index + 1 or 1
+          end
+          if dir then self:ensureVisible() end
+        end
+      end
+    else
+      local OptionsMenu = require("src.ui.OptionsMenu")
+      local vanillaUpdate = OptionsMenu.update
+      OptionsMenu.update = function(self, dt)
+        vanillaUpdate(self, dt)
+        if get("hold_to_scroll") then
+          local dir = holdNav(self, self.game.input)
+          local cancelRow = #self.rows + 1
+          if dir == "up" then
+            self.index = self.index > 1 and self.index - 1 or cancelRow
+          elseif dir == "down" then
+            self.index = self.index < cancelRow and self.index + 1 or 1
+          end
+          if dir then
+            self.scroll = OptionRows.clampScroll(self.index, self.scroll or 0,
+                                                 #self.rows, cancelRow)
+          end
+        end
+      end
+    end
+  end
+
   if Game._qolTogglesPartyMenuInstalled then return end
   Game._qolTogglesPartyMenuInstalled = true
 

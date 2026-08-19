@@ -200,6 +200,14 @@ love .
   and Down cycles through your party Pokémon without closing the screen,
   refreshing the sprite, stats and cry while retaining the page you are on
   (Stats or Moves & EXP).  Ships ON.
+- **INSTANT TEXT** — dialogue and menus type every glyph out at once
+  instead of the typewriter pace, no matter what TEXT SPEED is set to.  The
+  down-arrow / page prompts still gate on A like the cart.  Ships OFF.
+- **HOLD TO SCROLL** — hold Up or Down (and Left/Right on the QOL TOGGLES
+  card grid) to keep scrolling a menu instead of tapping the button for
+  every step.  Covers the bag, shop, box and Pokédex lists, the generic
+  menu boxes, the OPTIONS screen and the QOL TOGGLES submenu, on Red and
+  Gold alike.  Ships OFF.
 
 ## Notes
 

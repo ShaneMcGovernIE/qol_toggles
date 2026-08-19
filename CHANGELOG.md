@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.27.0] - 2026-08-19
+
+### Added
+
+- INSTANT TEXT: a new toggle that types all dialogue and menus out at once
+  instead of the engine's typewriter pace, overriding the TEXT SPEED
+  setting entirely.  The down-arrow / page prompts still gate on A like the
+  cart.  One wrap over the shared TextBox (src/render/TextBox.lua) covers
+  both Red and Gold.  Ships OFF.
+- HOLD TO SCROLL: a new toggle that adds hold-to-repeat to menu scrolling,
+  so holding Up or Down (and Left/Right on the QOL TOGGLES card grid) keeps
+  stepping instead of tapping per step.  Enables the engine's opt-in
+  ListMenu/ScriptMenu keyRepeat through the ui.list_menu hook (bag, shop,
+  box, Pokédex), and drives the generic Gen 1 Menu boxes, both OPTIONS
+  screens and the QOL TOGGLES submenu through a shared holdNav helper.
+  Works on Red and Gold alike.  Ships OFF.
+
 ## [1.26.0] - 2026-08-19
 
 ### Added

@@ -5,9 +5,17 @@
 ### Added
 
 - ANIM SKIP: a new toggle that lets the player skip battle animations,
-  Pokémon cries, and level up/learning jingles by pressing A during battle.
-  In addition, whenever audio overlap occurs, the first sound is force-stopped
-  before playing the second sound. Ships OFF.
+  Pokémon cries, and level up/learning jingles by pressing A during battle:
+  - Battle animations: pressing A immediately completes the move animation,
+    applies damage/hit effects, and advances the turn without waiting.
+  - Pokémon cries: entrance cries and battle cries are force-stopped on A-press,
+    instantly unblocking the battle queue.
+  - Level up & jingles: level up messages, fanfares, and move learning jingles
+    can be dismissed immediately with A.
+  - Audio overlap prevention: whenever audio overlap would occur, the first
+    sound is force-stopped before the next sound begins playing, eliminating
+    audio stacking.
+  - Works on Red/Blue/Yellow and Gold. Ships OFF.
 
 ## [1.27.0] - 2026-08-19
 

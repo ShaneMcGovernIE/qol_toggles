@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.28.0] - 2026-08-20
+
+### Added
+
+- ANIM SKIP: a new toggle that lets the player skip battle animations,
+  Pokémon cries, and level up/learning jingles by pressing A during battle.
+  In addition, whenever audio overlap occurs, the first sound is force-stopped
+  before playing the second sound. Ships OFF.
+
 ## [1.27.0] - 2026-08-19
 
 ### Added

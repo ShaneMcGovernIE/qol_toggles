@@ -80,6 +80,7 @@ do
   T.eq(shown["party_scroll"], true, "gen 2 keeps PARTY SCROLL")
   T.eq(shown["instant_text"], true, "gen 2 keeps INSTANT TEXT")
   T.eq(shown["hold_to_scroll"], true, "gen 2 keeps HOLD TO SCROLL")
+  T.eq(shown["anim_skip"], true, "gen 2 keeps ANIM SKIP")
   T.eq(ex2.visibleCount(true), #rows,
     "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
@@ -420,7 +421,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 42, "forty-two toggles in the submenu")
+T.eq(#rows, 43, "forty-three toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -473,6 +474,8 @@ T.eq(rows[41].id, "instant_text", "toggle 41: instant text")
 T.eq(rows[41].label, "INSTANT TEXT", "toggle 41: INSTANT TEXT label")
 T.eq(rows[42].id, "hold_to_scroll", "toggle 42: hold to scroll")
 T.eq(rows[42].label, "HOLD TO SCROLL", "toggle 42: HOLD TO SCROLL label")
+T.eq(rows[43].id, "anim_skip", "toggle 43: anim skip")
+T.eq(rows[43].label, "ANIM SKIP", "toggle 43: ANIM SKIP label")
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -581,6 +584,7 @@ T.eq(ex.defaultFor("quick_nurse"), false, "QUICK NURSE ships OFF")
 T.eq(ex.defaultFor("party_scroll"), true, "PARTY SCROLL ships ON")
 T.eq(ex.defaultFor("instant_text"), false, "INSTANT TEXT ships OFF")
 T.eq(ex.defaultFor("hold_to_scroll"), false, "HOLD TO SCROLL ships OFF")
+T.eq(ex.defaultFor("anim_skip"), false, "ANIM SKIP ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 -- ------------------------------------------------ HOLD TO SCROLL
 
@@ -3640,6 +3644,131 @@ do
   T.eq(ex.summarySwitchMon(screen, 1, { mon1 }), false, "single mon party does not switch")
   T.eq(ex.summarySwitchMon(nil, 1, party), false, "nil screen is rejected")
   T.eq(ex.summarySwitchMon(screen, 1, nil), false, "nil party is rejected")
+end
+
+-- ------------------------------------------------ ANIM SKIP & AUDIO OVERLAP
+do
+  -- 1. Active sound tracking and force stopping
+  local s1_stopped = false
+  local s2_stopped = false
+  local s1 = { stop = function() s1_stopped = true end }
+  local s2 = { stop = function() s2_stopped = true end }
+
+  ex.setActiveSound(s1)
+  ex.setActiveSound(s2)
+  ex.stopActiveSound()
+  T.eq(s1_stopped, true, "stopActiveSound stops sound 1")
+  T.eq(s2_stopped, true, "stopActiveSound stops sound 2")
+
+  -- 2. Sound wrapping audio overlap behavior
+  local Sound = require("src.core.Sound")
+  local sound1_stopped = false
+  local sound1 = { stop = function() sound1_stopped = true end, isPlaying = function() return true end }
+  
+  -- Toggle ON: playing a new sound force-stops the prior active sound
+  ex.set("anim_skip", true)
+  ex.setActiveSound(sound1)
+  T.eq(sound1_stopped, false, "sound 1 not yet stopped")
+  
+  -- Simulate next sound playing via Sound.play
+  Sound.play(Data, "Press_AB")
+  T.eq(sound1_stopped, true, "anim_skip ON: playing next sound force-stops previous active sound")
+
+  -- Toggle OFF: playing a sound does not force-stop previous active sound
+  ex.set("anim_skip", false)
+  local sound2_stopped = false
+  local sound2 = { stop = function() sound2_stopped = true end }
+  ex.setActiveSound(sound2)
+  Sound.play(Data, "Press_AB")
+  T.eq(sound2_stopped, false, "anim_skip OFF: previous sound is not force-stopped")
+
+  -- 3. Battle animation skip on A-press
+  local hitApplied = false
+  local animFinished = false
+  local animBattle = {
+    game = {
+      input = {
+        wasPressed = function(_, k) return k == "a" end,
+      },
+    },
+    animPlaying = true,
+    animPlayer = {
+      finish = function() animFinished = true end,
+    },
+    pendingHit = { target = {} },
+    applyHitFx = function(_, hit) hitApplied = (hit ~= nil) end,
+    resetPicFx = function() end,
+    waitFrames = 15,
+    fx = { shake = 10, flash = 5 },
+  }
+
+  local skipped = ex.skipAnimOrAudio(animBattle)
+  T.eq(skipped, true, "skipAnimOrAudio skips active battle animation")
+  T.eq(animBattle.animPlaying, false, "animPlaying set to false")
+  T.eq(animFinished, true, "animPlayer finish invoked")
+  T.eq(hitApplied, true, "pending hit effect applied")
+  T.eq(animBattle.pendingHit, nil, "pendingHit cleared")
+  T.eq(animBattle.waitFrames, 0, "waitFrames zeroed")
+  T.eq(animBattle.fx.shake, nil, "screen shake cleared")
+  T.eq(animBattle.fx.flash, nil, "screen flash cleared")
+
+  -- 4. Waiting sound (cry / jingle / fanfare) skip on A-press
+  local waitSoundStopped = false
+  local cryBattle = {
+    game = {
+      input = {
+        wasPressed = function(_, k) return k == "a" end,
+      },
+    },
+    waitingSound = {
+      stop = function() waitSoundStopped = true end,
+    },
+    waitFrames = 20,
+  }
+
+  skipped = ex.skipAnimOrAudio(cryBattle)
+  T.eq(skipped, true, "skipAnimOrAudio skips waitingSound hold")
+  T.eq(waitSoundStopped, true, "waitingSound force-stopped on A press")
+  T.eq(cryBattle.waitingSound, nil, "waitingSound cleared")
+  T.eq(cryBattle.waitFrames, 0, "waitFrames zeroed")
+
+  -- 5. Battle message text and prompts fast-forward / advance on A-press
+  local lineBegun = false
+  local msgBattle = {
+    game = {
+      input = {
+        wasPressed = function(_, k) return k == "a" end,
+      },
+    },
+    phase = "messages",
+    codes = { 0x41, 0x42, 0x43, 0x44 },
+    shown = { { 0x41 } },
+    charIndex = 1,
+    charTimer = 2,
+    msgPrompt = true,
+    msgPromptWait = 3,
+    msgPreWait = 3,
+  }
+
+  skipped = ex.skipAnimOrAudio(msgBattle)
+  T.eq(skipped, true, "skipAnimOrAudio fast-forwards messages")
+  T.eq(#msgBattle.shown[1], 4, "text codes filled immediately to end of line")
+  T.eq(msgBattle.charTimer, 0, "charTimer reset")
+  T.eq(msgBattle.msgPromptWait, 0, "msgPromptWait cleared")
+  T.eq(msgBattle.msgPrompt, nil, "msgPrompt dismissed")
+
+  -- 6. Inactive / No A press degenerate checks
+  local idleBattle = {
+    game = {
+      input = {
+        wasPressed = function(_, k) return false end,
+      },
+    },
+    animPlaying = true,
+  }
+  T.eq(ex.skipAnimOrAudio(idleBattle), false, "no A press does not skip")
+  T.eq(idleBattle.animPlaying, true, "animPlaying untouched without A press")
+  T.eq(ex.skipAnimOrAudio(nil), false, "nil battle rejected")
 end
 
 run.release()

@@ -47,6 +47,7 @@ return {
       "a PARTY SCROLL switch allows pressing Up and Down on the STATS screen to cycle through party Pokémon without closing the screen, retaining the active page (Stats or Moves/EXP)",
       "an INSTANT TEXT switch types all dialogue and menus out at once instead of the engine's typewriter pace, overriding the TEXT SPEED setting; the down-arrow / page prompts still gate on A like the cart",
       "a HOLD TO SCROLL switch lets holding Up or Down keep stepping a menu instead of tapping per step (and Left/Right on the QOL TOGGLES card grid), covering the bag, shop, box and Pokédex lists, the generic menu boxes, the OPTIONS screen and the QOL TOGGLES submenu on Red and Gold",
+      "an ANIM SKIP switch allows skipping battle animations, Pokémon cries, and level up jingles by pressing A, and force-stops prior sounds on audio overlap",
     },
     added = {
       "a QOL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",

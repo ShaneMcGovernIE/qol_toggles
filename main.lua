@@ -66,6 +66,8 @@
 --                      no matter the TEXT SPEED setting
 --   HOLD TO SCROLL     hold Up/Down (and Left/Right on the card grid) to
 --                      keep stepping a menu instead of tapping
+--   ANIM SKIP          skip battle anims, cries and level up jingles with A;
+--                      cuts audio overlap before next sound
 --
 -- START on a controller (or P on the keyboard) on any row opens an
 -- in-depth explanation of what that toggle does.
@@ -385,6 +387,8 @@ local TOGGLES = {
     help = "All dialogue and\nmenus type out\ninstantly, no\nmatter your TEXT\nSPEED setting.\vPages still\ngate on A." },
   { key = "hold_to_scroll", label = "HOLD TO SCROLL", default = false,
     help = "Hold Up or Down\nin a menu to\nkeep scrolling\ninstead of\ntapping.\vLists, options\nand this menu." },
+  { key = "anim_skip", label = "ANIM SKIP", default = false,
+    help = "Press A in battle\nto skip move\nanims, cries and\nlevel up jingles.\vStops overlap on\nthe next sound." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -2554,6 +2558,135 @@ return function(mod)
     return true
   end
 
+  -- ANIM SKIP: active sound tracking and force stopping on audio overlap
+  local activeSounds = {}
+  mod.exports.setActiveSound = function(src)
+    if not src then return end
+    activeSounds[src] = true
+  end
+
+  mod.exports.stopActiveSound = function()
+    for src in pairs(activeSounds) do
+      pcall(function()
+        if src.stop then src:stop() end
+      end)
+    end
+    activeSounds = {}
+  end
+
+  mod.exports.skipAnimOrAudio = function(battle)
+    if not battle then return false end
+    local input = battle.game and battle.game.input
+    if not input or not input:wasPressed("a") then return false end
+
+    local skipped = false
+
+    -- Gen 1 battle move animation / subanimation
+    if battle.animPlaying then
+      mod.exports.stopActiveSound()
+      if battle.waitingSound then
+        pcall(function() if battle.waitingSound.stop then battle.waitingSound:stop() end end)
+        battle.waitingSound = nil
+      end
+      if battle.animPlayer then
+        if type(battle.animPlayer.finish) == "function" then
+          pcall(battle.animPlayer.finish, battle.animPlayer)
+        elseif type(battle.animPlayer.stop) == "function" then
+          pcall(battle.animPlayer.stop, battle.animPlayer)
+        end
+      end
+      battle.animPlaying = false
+      if battle.pendingHit then
+        if type(battle.applyHitFx) == "function" then
+          battle:applyHitFx(battle.pendingHit)
+        end
+        battle.pendingHit = nil
+      end
+      if type(battle.resetPicFx) == "function" then
+        battle:resetPicFx()
+      end
+      battle.waitFrames = 0
+      if battle.fx then
+        battle.fx.shake = nil
+        battle.fx.flash = nil
+      end
+      battle.current = nil
+      skipped = true
+    end
+
+    -- Gen 2 battle move animation
+    if battle.anim then
+      mod.exports.stopActiveSound()
+      battle.anim = nil
+      if type(battle.advanceQueue) == "function" then
+        battle:advanceQueue()
+      end
+      skipped = true
+    end
+
+    -- Queued sounds (entrance cries, level up jingles, learn move jingles)
+    if battle.waitingSound then
+      pcall(function() if battle.waitingSound.stop then battle.waitingSound:stop() end end)
+      battle.waitingSound = nil
+      mod.exports.stopActiveSound()
+      battle.waitFrames = 0
+      skipped = true
+    end
+
+    -- In-battle text messages (level up text, move announcements, etc.)
+    if battle.phase == "messages" then
+      if battle.shown and battle.codes and #battle.shown > 0 then
+        local cur = battle.shown[#battle.shown]
+        if cur and #cur < #battle.codes then
+          while #cur < #battle.codes do
+            cur[#cur + 1] = battle.codes[#cur + 1]
+            battle.charIndex = (battle.charIndex or 0) + 1
+          end
+          battle.charTimer = 0
+          skipped = true
+        end
+      end
+
+      if (battle.msgPreWait or 0) > 0 then
+        battle.msgPreWait = 0
+        skipped = true
+      end
+      if (battle.msgPromptWait or 0) > 0 then
+        battle.msgPromptWait = 0
+        skipped = true
+      end
+
+      if battle.msgPrompt then
+        battle.msgPrompt = nil
+        battle.current = nil
+        if battle.waitingSound then
+          pcall(function() if battle.waitingSound.stop then battle.waitingSound:stop() end end)
+          battle.waitingSound = nil
+        end
+        mod.exports.stopActiveSound()
+        skipped = true
+      end
+
+      if battle.msgWaiting then
+        battle.msgWaiting = nil
+        if type(battle.beginMsgLine) == "function" then
+          battle:beginMsgLine()
+        end
+        battle.waitFrames = 0
+        skipped = true
+      end
+
+      if battle.current and battle.current.auto then
+        battle.msgAutoWait = 0
+        battle.msgHold = true
+        battle.current = nil
+        skipped = true
+      end
+    end
+
+    return skipped
+  end
+
   -- one wrap per session; hot reload re-runs entry chunks.  The guards hang
   -- off the Game module (the shared singleton on Gen 1); a test that loads
   -- the mod twice in one process must clear them between loads.
@@ -2585,6 +2718,7 @@ return function(mod)
       "src.world.gen2.Player", "src.battle.gen2.Catching",
       "src.pokemon.Pokemon", "src.battle.gen2.Mon",
       "src.battle.BattleState", "src.ui.SummaryMenu",
+      "src.core.Sound",
     }
     for _, name in ipairs(names) do
       local ok, module = pcall(require, name)
@@ -3177,6 +3311,108 @@ return function(mod)
         mod.exports.updateExpBar(self, dt)
       end
       return vanillaUpdate(self, dt)
+    end
+  end
+
+  -- ANIM SKIP: skip battle animations, cries, and level up jingles on A press
+  if not Game._qolTogglesAnimSkipInstalled then
+    Game._qolTogglesAnimSkipInstalled = true
+    local vanillaUpdate = BattleState.update
+    BattleState.update = function(self, dt)
+      if get("anim_skip") then
+        mod.exports.skipAnimOrAudio(self)
+      end
+      return vanillaUpdate(self, dt)
+    end
+  end
+
+  -- ANIM SKIP: wrap Sound to eliminate audio overlap
+  local okSound, SoundModule = pcall(require, "src.core.Sound")
+  if okSound and SoundModule and not SoundModule._qolTogglesAnimSkipInstalled then
+    SoundModule._qolTogglesAnimSkipInstalled = true
+
+    local vanillaPlay = SoundModule.play
+    if type(vanillaPlay) == "function" then
+      SoundModule.play = function(data, name, ...)
+        if get("anim_skip") then
+          mod.exports.stopActiveSound()
+        end
+        local src = vanillaPlay(data, name, ...)
+        if get("anim_skip") and src then
+          mod.exports.setActiveSound(src)
+        end
+        return src
+      end
+    end
+
+    local vanillaPlayStereo = SoundModule.playStereo
+    if type(vanillaPlayStereo) == "function" then
+      SoundModule.playStereo = function(data, name, ...)
+        if get("anim_skip") then
+          mod.exports.stopActiveSound()
+        end
+        local src = vanillaPlayStereo(data, name, ...)
+        if get("anim_skip") and src then
+          mod.exports.setActiveSound(src)
+        end
+        return src
+      end
+    end
+
+    local vanillaPlayCry = SoundModule.playCry
+    if type(vanillaPlayCry) == "function" then
+      SoundModule.playCry = function(data, species, ...)
+        if get("anim_skip") then
+          mod.exports.stopActiveSound()
+        end
+        local src = vanillaPlayCry(data, species, ...)
+        if get("anim_skip") and src then
+          mod.exports.setActiveSound(src)
+        end
+        return src
+      end
+    end
+
+    local vanillaPlayPikaCry = SoundModule.playPikaCry
+    if type(vanillaPlayPikaCry) == "function" then
+      SoundModule.playPikaCry = function(data, n, ...)
+        if get("anim_skip") then
+          mod.exports.stopActiveSound()
+        end
+        local src = vanillaPlayPikaCry(data, n, ...)
+        if get("anim_skip") and src then
+          mod.exports.setActiveSound(src)
+        end
+        return src
+      end
+    end
+
+    local vanillaPlayMoveCry = SoundModule.playMoveCry
+    if type(vanillaPlayMoveCry) == "function" then
+      SoundModule.playMoveCry = function(data, species, ...)
+        if get("anim_skip") then
+          mod.exports.stopActiveSound()
+        end
+        local src = vanillaPlayMoveCry(data, species, ...)
+        if get("anim_skip") and src then
+          mod.exports.setActiveSound(src)
+        end
+        return src
+      end
+    end
+
+    local vanillaPlayMove = SoundModule.playMove
+    if type(vanillaPlayMove) == "function" then
+      SoundModule.playMove = function(data, anim, ...)
+        if get("anim_skip") then
+          mod.exports.stopActiveSound()
+        end
+        local src = vanillaPlayMove(data, anim, ...)
+        if get("anim_skip") and src then
+          mod.exports.setActiveSound(src)
+        end
+        return src
+      end
     end
   end
 

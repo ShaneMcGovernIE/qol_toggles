@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.29.0] - 2026-08-20
+
+### Added
+
+- SAND FREE: a new toggle that stops wild Pokémon from ever using
+  SAND-ATTACK.  When a wild enemy would roll SAND-ATTACK, its move choice is
+  re-rolled from its other usable moves instead (max 8 attempts); a wild mon
+  whose only usable move is SAND-ATTACK Struggles rather than throw sand, so
+  the move is never used against you in a wild battle.
+  - Wild battles only: trainer battles keep their vanilla AI untouched.
+  - The move is not removed from the wild mon's moveset, so a caught
+    Sandshrew, Pidgey or Geodude still knows it for your own use.
+  - Works on Red/Blue/Yellow and Gold alike: one wrap over the engine's
+    battle.enemy_action choke point (BattleState:enemyAction on Gen 1,
+    Battle:enemyMove on Gen 2) covers both generations.
+  - Ships OFF.  Toggle it in OPTIONS → QOL TOGGLES.
+
 ## [1.28.1] - 2026-08-20
 
 ### Added

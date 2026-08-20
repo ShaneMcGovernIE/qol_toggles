@@ -212,6 +212,14 @@ love .
   animations, Pokémon cries, level up jingles, and item get fanfares (e.g.
   "Red got Oak's Parcel"). In the event of audio overlap, the first sound
   is force-stopped before playing the second sound. Ships OFF.
+- **SAND FREE** — wild Pokémon never use SAND-ATTACK.  When a
+  wild enemy would roll SAND-ATTACK, its move choice is re-rolled from its
+  other usable moves; a wild mon whose only usable move is SAND-ATTACK
+  Struggles instead, so it is never used.  Trainer battles are untouched —
+  only wild mons are re-rolled — and the move is not removed from the
+  moveset, so a caught wild Sandshrew still knows it.  Ships OFF.  Works
+  on Red and Gold alike (both route enemy move choice through the
+  engine's battle.enemy_action hook).
 
 ## Notes
 

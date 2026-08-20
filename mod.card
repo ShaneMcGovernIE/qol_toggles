@@ -48,6 +48,7 @@ return {
       "an INSTANT TEXT switch types all dialogue and menus out at once instead of the engine's typewriter pace, overriding the TEXT SPEED setting; the down-arrow / page prompts still gate on A like the cart",
       "a HOLD TO SCROLL switch lets holding Up or Down keep stepping a menu instead of tapping per step (and Left/Right on the QOL TOGGLES card grid), covering the bag, shop, box and Pokédex lists, the generic menu boxes, the OPTIONS screen and the QOL TOGGLES submenu on Red and Gold",
       "an ANIM SKIP switch allows skipping battle animations, Pokémon cries, level up jingles, and overworld item get fanfares (e.g. Oak's Parcel) by pressing A, and force-stops prior sounds on audio overlap",
+      "a SAND FREE switch re-rolls a wild Pokémon's move choice when it would use SAND-ATTACK (Struggle if that is all it knows), so wild mons never use it; trainer battles keep their vanilla AI, and the move stays in the caught mon's moveset",
     },
     added = {
       "a QOL TOGGLES row in OPTIONS that opens a submenu with the toggles, persisted in options.lua",
@@ -55,7 +56,7 @@ return {
     known = {
       "On Gold, the Gen 1-cart-only toggles (QUICK S.S. ANNE, BULK COINS, LIGHTS ON, MOUSE CAM LOCK, LAST ITEM (M), AUTO BATTLER, EXP BAR, POKEBALL BONUS, BULK MART, FORGETTABLE HMs) do not appear in the submenu -- Gold's mart, battle-item and HM-forget APIs have no honest equivalent yet, and Gold already renders a native EXP bar in battle.  The rest behave the same on both generations",
       "REPEL does not affect fishing encounters (the engine's encounter.fishing path is untouched), matching the vanilla Repel item",
-      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION, RENAME and PARTY SCROLL ship ON; the other thirty, including AUTO BATTLER, EXP BAR, INSTANT TEXT, HOLD TO SCROLL, B FOR QUICK FLEE and TURN AWAY (NURSE), ship OFF.  Toggles persist in options.lua, independent of save files",
+      "POISON SAVE, FULL HEAL CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION, RENAME and PARTY SCROLL ship ON; the other thirty-two, including AUTO BATTLER, EXP BAR, INSTANT TEXT, HOLD TO SCROLL, B FOR QUICK FLEE, TURN AWAY (NURSE) and SAND FREE, ship OFF.  Toggles persist in options.lua, independent of save files",
       "INSTANT FISH leaves the rod's brief cast pause in place, and a map with no fishing group still has nothing to catch",
       "AUTO CUT only fires when a party mon knows CUT (FIELD MOVES ALL does not extend to it), and the step is consumed by the cut text + animation",
       "NO ENCOUNTER DUPES is session-scoped, so a restart forgets the last species",

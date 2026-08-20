@@ -421,7 +421,7 @@ local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
 
-T.eq(#rows, 43, "forty-three toggles in the submenu")
+T.eq(#rows, 44, "forty-four toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -476,6 +476,8 @@ T.eq(rows[42].id, "hold_to_scroll", "toggle 42: hold to scroll")
 T.eq(rows[42].label, "HOLD TO SCROLL", "toggle 42: HOLD TO SCROLL label")
 T.eq(rows[43].id, "anim_skip", "toggle 43: anim skip")
 T.eq(rows[43].label, "ANIM SKIP", "toggle 43: ANIM SKIP label")
+T.eq(rows[44].id, "sand_free", "toggle 44: sand free")
+T.eq(rows[44].label, "SAND FREE", "toggle 44: SAND FREE label")
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -585,6 +587,7 @@ T.eq(ex.defaultFor("party_scroll"), true, "PARTY SCROLL ships ON")
 T.eq(ex.defaultFor("instant_text"), false, "INSTANT TEXT ships OFF")
 T.eq(ex.defaultFor("hold_to_scroll"), false, "HOLD TO SCROLL ships OFF")
 T.eq(ex.defaultFor("anim_skip"), false, "ANIM SKIP ships OFF")
+T.eq(ex.defaultFor("sand_free"), false, "SAND FREE ships OFF")
 T.eq(ex.defaultFor("bogus"), false, "unknown keys default OFF")
 -- ------------------------------------------------ HOLD TO SCROLL
 
@@ -2422,7 +2425,7 @@ for _, spec in ipairs({ -- the ids are stable, from the TOGGLES list
   "auto_repel",
   "bulk_mart", "bulk_coins", "lights_on", "remember_move", "keep_money",
   "auto_cut", "run_hold_b",
-  "auto_battler", "map_location",
+  "auto_battler", "map_location", "sand_free",
 }) do
   local help = ex.helpFor(spec)
   T.check(type(help) == "string" and #help > 0,
@@ -3360,6 +3363,67 @@ do
                         randomWithinCategory = true, unlimited = false })
   T.eq(latchMon._qolPalaceLowHp, true,
        "healing does not clear the Palace style latch")
+end
+
+-- ------- SAND FREE (battle.enemy_action choke point)
+
+bucket.sand_free = true
+do
+  local wild = { kind = "wild" }
+  local gen1Sand = { id = "SAND_ATTACK", pp = 5 }
+  local gen2Sand = "SAND_ATTACK"
+  local scratch = { id = "FIX_SCRATCH", pp = 10 }
+
+  T.eq(ex.sandFreeAction(scratch, wild).id, "FIX_SCRATCH",
+       "a non-SAND-ATTACK pick passes through untouched")
+  T.eq(ex.sandFreeAction(nil, wild), nil,
+       "the Gen 2 forced/struggle nil passes through")
+  T.eq(ex.sandFreeAction(gen1Sand, wild,
+                           function() return scratch end).id,
+       "FIX_SCRATCH",
+       "a wild SAND-ATTACK roll is re-rolled to another move")
+  T.eq(ex.sandFreeAction(gen2Sand, wild,
+                           function() return "FIX_SCRATCH" end),
+       "FIX_SCRATCH",
+       "the Gen 2 bare-id shape re-rolls too")
+  T.eq(ex.sandFreeAction(gen1Sand, wild,
+                           function() return gen1Sand end).id,
+       "STRUGGLE",
+       "a wild mon that only knows SAND-ATTACK Struggles instead")
+  local struggle = ex.sandFreeAction(gen1Sand, wild,
+                                       function() return gen1Sand end)
+  T.eq(struggle.struggle, true, "the Struggle fallback carries the flag")
+  T.eq(ex.sandFreeAction(gen1Sand, { kind = "trainer" },
+                           function() return scratch end).id,
+       "SAND_ATTACK", "trainer battles keep their vanilla SAND-ATTACK")
+  T.eq(ex.sandFreeAction(gen1Sand, { wild = true },
+                           function() return scratch end).id,
+       "FIX_SCRATCH", "the Gen 2 wild flag filters too")
+  T.eq(ex.sandFreeAction(gen1Sand, { kind = "trainer" }),
+       gen1Sand, "a trainer battle without a re-roll passes through")
+
+  -- the installed wrap answers the engine's battle.enemy_action hook:
+  -- the vanilla chain (next) is the enemy pick, the wrap re-rolls a wild
+  -- SAND-ATTACK by calling it again
+  local calls = 0
+  local vanilla = function()
+    calls = calls + 1
+    return calls == 1 and gen1Sand or scratch
+  end
+  T.eq(Runtime.call("battle.enemy_action", vanilla, wild).id,
+       "FIX_SCRATCH",
+       "the live battle.enemy_action wrap re-rolls the wild pick")
+  T.eq(calls, 2, "the re-roll called the vanilla chain twice")
+
+  bucket.sand_free = false
+  T.eq(ex.sandFreeAction(gen1Sand, wild,
+                         function() return scratch end).id,
+       "SAND_ATTACK", "toggle OFF: the vanilla pick passes through")
+  calls = 0
+  T.eq(Runtime.call("battle.enemy_action", vanilla, wild).id,
+       "SAND_ATTACK", "toggle OFF: the live wrap leaves the pick alone")
+  T.eq(calls, 1, "toggle OFF: the vanilla chain ran exactly once")
+  bucket.sand_free = false
 end
 
 -- ------- RUN (HOLD B) (runFrames halves the per-step frame count)

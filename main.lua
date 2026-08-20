@@ -389,6 +389,8 @@ local TOGGLES = {
     help = "Hold Up or Down\nin a menu to\nkeep scrolling\ninstead of\ntapping.\vLists, options\nand this menu." },
   { key = "anim_skip", label = "ANIM SKIP", default = false,
     help = "Press A to skip\nanims, cries,\nlevel up jingles,\nand item get\nfanfares.\vStops overlap on\nthe next sound." },
+  { key = "sand_free", label = "SAND FREE", default = false,
+    help = "Wild POKéMON\nnever use\nSAND-ATTACK.\vTrainers still\nmay; a mon that\nonly knows it\nStruggles." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -913,6 +915,24 @@ return function(mod)
       if enc.species ~= last then return enc end
     end
     return lastRoll
+  end
+
+  -- SAND FREE: a wild enemy that rolls SAND-ATTACK is re-rolled
+  -- from its other usable moves (max attempts, then it Struggles rather
+  -- than ever use it -- "never" is absolute).  Pure: action is the
+  -- vanilla enemy action (a move table on Gen 1, a bare move id on Gen 2),
+  -- and nextAction re-runs the vanilla choice for the re-roll.
+  mod.exports.sandFreeAction = function(action, battle, nextAction)
+    if not get("sand_free") or not battle then return action end
+    if not (battle.kind == "wild" or battle.wild == true) then return action end
+    local id = type(action) == "table" and (action.id or action.move) or action
+    if id ~= "SAND_ATTACK" then return action end
+    for _ = 1, 8 do
+      local reroll = nextAction and nextAction() or action
+      local rid = type(reroll) == "table" and (reroll.id or reroll.move) or reroll
+      if rid ~= "SAND_ATTACK" then return reroll end
+    end
+    return { id = "STRUGGLE", pp = 1, struggle = true }
   end
 
   -- INSTANT FISH: a uniform pick from the rod's candidate group, skipping
@@ -4334,6 +4354,18 @@ return function(mod)
   mod.hooks:wrap("battle.run", function(next, ctx)
     if get("instant_flee") then return true end
     return next(ctx)
+  end)
+
+  -- SAND FREE: battle.enemy_action is the engine's enemy move
+  -- choice choke point on both generations (BattleState:enemyAction on
+  -- Gen 1, Battle:enemyMove on Gen 2) -- the seam exists precisely so a
+  -- mod can rewrite the enemy's pick.  A wild mon that would roll
+  -- SAND-ATTACK is re-rolled to another usable move (Struggle if that is
+  -- all it knows); trainer battles keep their vanilla AI.
+  mod.hooks:wrap("battle.enemy_action", function(next, battle)
+    return mod.exports.sandFreeAction(next(battle), battle, function()
+      return next(battle)
+    end)
   end)
 
   -- UNLIMITED TMs / FORGETTABLE HMs: patched once per session like the

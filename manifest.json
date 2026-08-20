@@ -1,11 +1,14 @@
 {
   "id": "qol_toggles",
   "name": "QoL Toggles",
-  "version": "1.28.1",
+  "version": "1.29.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
-  "games": ["gen1", "gen2"],
+  "games": [
+    "gen1",
+    "gen2"
+  ],
   "category": "QOL",
   "priority": 100,
   "dependencies": [],
@@ -14,6 +17,6 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), TMs that never break, forgettable HMs, selectable EXP and money multipliers (0x, 1.5x, 2x, 3x or 4x), Battle Palace-style auto battling driven by Gen 1 DVs and stat EXP, area-name toasts, on-the-fly renaming from the party menu, a no-dialogue quick nurse, party scrolling in the STATS screen that retains your page, a battle cursor that remembers its place and jumps to RUN on B at the menu root, no encounter dupes, instant fishing, post-battle heals, an auto turn-away after the nurse heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, hold-B running, a Gen 2-style battle EXP bar, a mouse-cam lock for Dramatic Shape, instant text that types all dialogue out at once, hold-to-scroll menus, and an Anim Skip toggle to skip battle animations, cries, and overworld item/level-up fanfares with A.",
+  "description": "OPTIONS -> QOL TOGGLES submenu: poison survives at 1 HP, captures are fully healed with PP restored, an infinite repel, every learnable field move usable without knowing it (HM extras need the HM item), TMs that never break, forgettable HMs, selectable EXP and money multipliers (0x, 1.5x, 2x, 3x or 4x), Battle Palace-style auto battling driven by Gen 1 DVs and stat EXP, area-name toasts, on-the-fly renaming from the party menu, a no-dialogue quick nurse, party scrolling in the STATS screen that retains your page, a battle cursor that remembers its place and jumps to RUN on B at the menu root, no encounter dupes, instant fishing, post-battle heals, an auto turn-away after the nurse heals, auto-refilling repels, bulk mart quantities, lit caves, a remembered fight move, blackouts that keep your money, auto-cut trees, hold-B running, a Gen 2-style battle EXP bar, a mouse-cam lock for Dramatic Shape, instant text that types all dialogue out at once, hold-to-scroll menus, and an Anim Skip toggle to skip battle animations, cries, and overworld item/level-up fanfares with A, and a SAND FREE toggle so wild Pokémon never use SAND-ATTACK (trainer battles keep their vanilla AI).",
   "github": "ShaneMcGovernIE/qol_toggles"
 }

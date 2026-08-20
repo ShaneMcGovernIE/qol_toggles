@@ -208,8 +208,9 @@ love .
   every step.  Covers the bag, shop, box and Pokédex lists, the generic
   menu boxes, the OPTIONS screen and the QOL TOGGLES submenu, on Red and
   Gold alike.  Ships OFF.
-- **ANIM SKIP** — press A during battle to skip move animations, Pokémon
-  cries, and level up jingles. In the event of audio overlap, the first sound
+- **ANIM SKIP** — press A during battle or overworld events to skip move
+  animations, Pokémon cries, level up jingles, and item get fanfares (e.g.
+  "Red got Oak's Parcel"). In the event of audio overlap, the first sound
   is force-stopped before playing the second sound. Ships OFF.
 
 ## Notes

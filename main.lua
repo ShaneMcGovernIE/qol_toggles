@@ -388,7 +388,7 @@ local TOGGLES = {
   { key = "hold_to_scroll", label = "HOLD TO SCROLL", default = false,
     help = "Hold Up or Down\nin a menu to\nkeep scrolling\ninstead of\ntapping.\vLists, options\nand this menu." },
   { key = "anim_skip", label = "ANIM SKIP", default = false,
-    help = "Press A in battle\nto skip move\nanims, cries and\nlevel up jingles.\vStops overlap on\nthe next sound." },
+    help = "Press A to skip\nanims, cries,\nlevel up jingles,\nand item get\nfanfares.\vStops overlap on\nthe next sound." },
 }
 
 -- the out-of-battle moves the party menu can offer (PartyMenu's own list).
@@ -2687,6 +2687,55 @@ return function(mod)
     return skipped
   end
 
+  mod.exports.skipTextBox = function(box)
+    if not box then return false end
+    local input = box.game and box.game.input
+    if not input or not (input:wasPressed("a") or input:wasPressed("b")) then return false end
+
+    local skipped = false
+
+    -- Pre-sound (e.g. Cinnabar gym quiz buzzer)
+    if box.preSound or box.preSrc then
+      mod.exports.stopActiveSound()
+      if box.preSrc then
+        pcall(function() if box.preSrc.stop then box.preSrc:stop() end end)
+        box.preSrc = nil
+      end
+      box.preSound = nil
+      skipped = true
+    end
+
+    -- Auto-sound / jingles (e.g. "Red got Oak's Parcel", items, TMs, key items, cries)
+    if box.auto then
+      mod.exports.stopActiveSound()
+      if box.autoSrc then
+        pcall(function() if box.autoSrc.stop then box.autoSrc:stop() end end)
+        box.autoSrc = nil
+      end
+      box.auto = nil
+      if box.done then
+        if box.game and box.game.stack and type(box.game.stack.pop) == "function" then
+          box.game.stack:pop()
+        end
+        if box.onDone then box.onDone() end
+        return true
+      end
+      skipped = true
+    end
+
+    -- Transition delays / pre-wait
+    if (box.holdFrames or 0) > 0 then
+      box.holdFrames = 0
+      skipped = true
+    end
+    if (box.preWait or 0) > 0 then
+      box.preWait = 0
+      skipped = true
+    end
+
+    return skipped
+  end
+
   -- one wrap per session; hot reload re-runs entry chunks.  The guards hang
   -- off the Game module (the shared singleton on Gen 1); a test that loads
   -- the mod twice in one process must clear them between loads.
@@ -2718,7 +2767,7 @@ return function(mod)
       "src.world.gen2.Player", "src.battle.gen2.Catching",
       "src.pokemon.Pokemon", "src.battle.gen2.Mon",
       "src.battle.BattleState", "src.ui.SummaryMenu",
-      "src.core.Sound",
+      "src.core.Sound", "src.render.TextBox",
     }
     for _, name in ipairs(names) do
       local ok, module = pcall(require, name)
@@ -4378,6 +4427,15 @@ return function(mod)
          and self.charIndex < #(self.codes or {}) then
         self.charTimer = (self.charTimer or 0) + 100000
       end
+
+      if get("anim_skip") then
+        if mod.exports.skipTextBox(self) then
+          if self.done then
+            return
+          end
+        end
+      end
+
       return vanillaUpdate(self, dt)
     end
   end

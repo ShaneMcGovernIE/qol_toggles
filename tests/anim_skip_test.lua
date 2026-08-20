@@ -289,4 +289,102 @@ do
   assertEq(battleIdle.animPlaying, true, "animPlaying remained true")
 end
 
+-- 4. Overworld item get fanfare & textbox skip with A button
+do
+  local function skipTextBox(box, stopActiveSoundFn)
+    if not box then return false end
+    local input = box.game and box.game.input
+    if not input or not (input:wasPressed("a") or input:wasPressed("b")) then return false end
+
+    local skipped = false
+
+    if box.preSound or box.preSrc then
+      if stopActiveSoundFn then stopActiveSoundFn() end
+      if box.preSrc then
+        pcall(function() if box.preSrc.stop then box.preSrc:stop() end end)
+        box.preSrc = nil
+      end
+      box.preSound = nil
+      skipped = true
+    end
+
+    if box.auto then
+      if stopActiveSoundFn then stopActiveSoundFn() end
+      if box.autoSrc then
+        pcall(function() if box.autoSrc.stop then box.autoSrc:stop() end end)
+        box.autoSrc = nil
+      end
+      box.auto = nil
+      if box.done then
+        if box.game and box.game.stack and type(box.game.stack.pop) == "function" then
+          box.game.stack:pop()
+        end
+        if box.onDone then box.onDone() end
+        return true
+      end
+      skipped = true
+    end
+
+    if (box.holdFrames or 0) > 0 then
+      box.holdFrames = 0
+      skipped = true
+    end
+    if (box.preWait or 0) > 0 then
+      box.preWait = 0
+      skipped = true
+    end
+
+    return skipped
+  end
+
+  -- Test "Red got Oak's Parcel!" item get fanfare skip
+  local itemSoundStopped = false
+  local popped = false
+  local onDoneCalled = false
+
+  local itemBox = {
+    game = {
+      input = { wasPressed = function(_, k) return k == "a" end },
+      stack = { pop = function() popped = true end },
+    },
+    done = true,
+    auto = {
+      sound = function() return { stop = function() itemSoundStopped = true end } end,
+      wait = true,
+    },
+    autoSrc = { stop = function() itemSoundStopped = true end },
+    onDone = function() onDoneCalled = true end,
+  }
+
+  local skipped = skipTextBox(itemBox, function() itemSoundStopped = true end)
+  assertEq(skipped, true, "skipTextBox skipped item fanfare")
+  assertEq(itemSoundStopped, true, "Item fanfare sound stopped")
+  assertEq(itemBox.auto, nil, "box.auto cleared")
+  assertEq(popped, true, "TextBox popped from game stack")
+  assertEq(onDoneCalled, true, "onDone callback invoked to continue script")
+
+  -- Test pre-sound skip (e.g. Cinnabar quiz sound)
+  local preStopped = false
+  local quizBox = {
+    game = { input = { wasPressed = function(_, k) return k == "a" end } },
+    preSrc = { stop = function() preStopped = true end },
+    preSound = function() end,
+  }
+  skipped = skipTextBox(quizBox)
+  assertEq(skipped, true, "preSound skipped")
+  assertEq(preStopped, true, "preSound source stopped")
+  assertEq(quizBox.preSrc, nil, "preSrc cleared")
+  assertEq(quizBox.preSound, nil, "preSound cleared")
+
+  -- Test No A/B press -> does not skip
+  local idleBox = {
+    game = { input = { wasPressed = function() return false end } },
+    auto = { wait = true },
+    done = true,
+  }
+  skipped = skipTextBox(idleBox)
+  assertEq(skipped, false, "No A-press returned false for TextBox")
+  assertEq(idleBox.auto ~= nil, true, "auto kept when no button pressed")
+end
+
 print("=== All Anim Skip & Audio Overlap tests passed successfully! ===")

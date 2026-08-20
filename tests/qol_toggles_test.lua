@@ -3757,7 +3757,29 @@ do
   T.eq(msgBattle.msgPromptWait, 0, "msgPromptWait cleared")
   T.eq(msgBattle.msgPrompt, nil, "msgPrompt dismissed")
 
-  -- 6. Inactive / No A press degenerate checks
+  -- 6. Overworld item get fanfare / TextBox skip on A-press
+  local itemStopped = false
+  local popped = false
+  local onDoneCalled = false
+  local itemBox = {
+    game = {
+      input = { wasPressed = function(_, k) return k == "a" end },
+      stack = { pop = function() popped = true end },
+    },
+    done = true,
+    auto = { wait = true },
+    autoSrc = { stop = function() itemStopped = true end },
+    onDone = function() onDoneCalled = true end,
+  }
+
+  skipped = ex.skipTextBox(itemBox)
+  T.eq(skipped, true, "skipTextBox skips overworld item fanfare")
+  T.eq(itemStopped, true, "item fanfare stopped on A-press")
+  T.eq(itemBox.auto, nil, "itemBox.auto cleared")
+  T.eq(popped, true, "itemBox popped from stack")
+  T.eq(onDoneCalled, true, "itemBox onDone called")
+
+  -- 7. Inactive / No A press degenerate checks
   local idleBattle = {
     game = {
       input = {
@@ -3769,6 +3791,7 @@ do
   T.eq(ex.skipAnimOrAudio(idleBattle), false, "no A press does not skip")
   T.eq(idleBattle.animPlaying, true, "animPlaying untouched without A press")
   T.eq(ex.skipAnimOrAudio(nil), false, "nil battle rejected")
+  T.eq(ex.skipTextBox(nil), false, "nil textbox rejected")
 end
 
 run.release()

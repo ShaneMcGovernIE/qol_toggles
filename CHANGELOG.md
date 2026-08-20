@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.28.1] - 2026-08-20
+
+### Added
+
+- ANIM SKIP: extended to overworld item events (e.g. "Red got Oak's Parcel",
+  found items, gifted items, Key Items, TMs/HMs) and fanfare textboxes,
+  allowing pressing A to immediately skip the item fanfare and advance/close
+  the textbox without waiting for the audio to finish.
+
 ## [1.28.0] - 2026-08-20
 
 ### Added

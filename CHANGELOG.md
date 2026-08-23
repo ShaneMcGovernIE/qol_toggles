@@ -2,23 +2,19 @@
 
 ## [1.30.0] - 2026-08-23
 
-### Added
+### What's new
 
-- Gold compatibility for the complete toggle set. Gold now keeps every row
-  visible and routes the previously Gen 1-only behaviors through its native
-  BattleState, MartMenu, Game2 item flow, SummaryMenu, Gen2Compat talk seam,
-  map palette seam and script-backed world data: QUICK SHIP, LAST ITEM,
-  POKEBALL BONUS, BULK MART, BULK COINS, LIGHTS ON, AUTO BATTLER, EXP BAR,
-  PARTY SCROLL and FORGETTABLE HMs.
-- The Gen 2 checker is clean of compatibility errors; the remaining notes are
-  dynamic-require/static-analysis notes or documented Gold input behavior.
-- Added the Gen 2-only INFINITE HELD ITEM toggle: consumed party held items
-  are restored after battle, never during the battle.
+- The mod now works with Pokémon Gold and Silver as well as Red, Blue and
+  Yellow. Most of the existing options are available in both versions, and
+  options that only make sense for one game are hidden automatically.
+- **Infinite Held Item** is available in Gold and Silver. When a Pokémon uses
+  a held item such as a Berry during battle, it comes back after the battle.
+  It is not refilled during the battle, so a Berry can still only heal once.
 
 ### Fixed
 
-- Gen 2 ANIM SKIP now finalizes skipped send-out animations so the active
-  Pokémon's name and HP HUD remain visible.
+- **Anim Skip** no longer makes the Pokémon's name or health information
+  disappear when you press A during a Gold or Silver battle.
 
 ## [1.29.0] - 2026-08-20
 

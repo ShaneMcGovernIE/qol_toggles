@@ -132,7 +132,10 @@ local function drawExpBar(battle, graphics)
   pixels = math.max(0, math.min(EXP_BAR_WIDTH, math.floor(pixels or 0)))
   if pixels <= 0 then return end
 
-  local x = EXP_BAR_RIGHT - pixels
+  local isWide = (type(battle.wideLayout) == "function" and battle:wideLayout())
+                 or (type(battle.isWideBattleLayout) == "function" and battle:isWideBattleLayout())
+  local right = isWide and 291 or EXP_BAR_RIGHT
+  local x = right - pixels
   local y = EXP_BAR_Y
 
   graphics.setColor(0, 0, 0, 1)
@@ -210,5 +213,14 @@ assertEq(drawCalls.rect[2], 114, "Draw X 114 (147 - 33)")
 assertEq(drawCalls.rect[3], 89, "Draw Y 89")
 assertEq(drawCalls.rect[4], 33, "Draw width 33")
 assertEq(drawCalls.rect[5], 2, "Draw height 2")
+
+battle.wideLayout = function() return true end
+drawExpBar(battle, mockGraphics)
+assertEq(drawCalls.rect[2], 258, "Draw wide X 258 (291 - 33)")
+
+battle.wideLayout = nil
+battle.isWideBattleLayout = function() return true end
+drawExpBar(battle, mockGraphics)
+assertEq(drawCalls.rect[2], 258, "Draw wide X via isWideBattleLayout (291 - 33)")
 
 print("=== All EXP Bar standalone tests passed successfully! ===")

@@ -1751,8 +1751,9 @@ return function(mod)
 
   -- ---------------------------------------------------- BATTLE EXP BAR
   -- Gen 2-style EXP bar in battle: renders a thin black bar below the
-  -- player's HP numbers along the bottom border line (x=80..147, y=89, width 67px,
-  -- height 2px), filling from right to left as the active Pokémon gains EXP
+  -- player's HP numbers along the bottom border line (x=80..147 in classic
+  -- battles, x=224..291 in wide battles, y=89, width 67px, height 2px),
+  -- filling from right to left as the active Pokémon gains EXP
   -- toward its next level. At max level (level 100), the bar fills completely
   -- from the right vertical tick all the way to the left arrow.
   -- Smoothly animates during battle when EXP is gained and loops through
@@ -1890,7 +1891,10 @@ return function(mod)
     px = math.max(0, math.min(EXP_BAR_WIDTH, math.floor(px or 0)))
     if px <= 0 then return end
 
-    local x = EXP_BAR_RIGHT - px
+    local isWide = (type(battle.wideLayout) == "function" and battle:wideLayout())
+                   or (type(battle.isWideBattleLayout) == "function" and battle:isWideBattleLayout())
+    local right = isWide and 291 or EXP_BAR_RIGHT
+    local x = right - px
     local y = EXP_BAR_Y
 
     local g = love.graphics

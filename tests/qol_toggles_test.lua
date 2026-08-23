@@ -53,10 +53,9 @@ do
   local ex2 = run2.loader.exports.qol_toggles
   T.neq(ex2, nil, "gen 2 exports reachable")
 
-  -- gen1-tagged toggles (S.S. Anne, Game Corner, dark caves, Dramatic Shape,
-  -- last item, auto battler, mart, TM/HM surgery) drop out of the list on a
-  -- Gold boot; the rest stay.  gen2 is passed explicitly because the gen1
-  -- engine this suite runs on cannot reach the loader's gen2 flag.
+  -- Every shipped toggle has a Gold implementation.  gen2 is passed
+  -- explicitly because the gen1 engine this suite runs on cannot reach the
+  -- loader's gen2 flag.
   local state = {}
   local rows = ex2.toggleRows(function(k) return state[k] end,
                              function(k, v) state[k] = v end, true)
@@ -66,7 +65,7 @@ do
                         "mouse_cam_lock", "last_item", "auto_battler",
                         "free_great_ball", "bulk_mart",
                         "forgettable_hms", "exp_bar" }) do
-    T.eq(shown[id], nil, "gen 2 hides the gen1-only toggle " .. id)
+    T.eq(shown[id], true, "gen 2 keeps the Gold-compatible toggle " .. id)
   end
   T.eq(shown["poison_save"], true, "gen 2 keeps POISON SAVE")
   T.eq(shown["always_catch"], true, "gen 2 keeps ALWAYS CATCH")
@@ -81,10 +80,43 @@ do
   T.eq(shown["instant_text"], true, "gen 2 keeps INSTANT TEXT")
   T.eq(shown["hold_to_scroll"], true, "gen 2 keeps HOLD TO SCROLL")
   T.eq(shown["anim_skip"], true, "gen 2 keeps ANIM SKIP")
+  T.eq(shown["infinite_held_item"], true,
+    "gen 2 shows INFINITE HELD ITEM")
   T.eq(ex2.visibleCount(true), #rows,
     "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
     "gen 2 enabled count matches the shown rows")
+
+  -- INFINITE HELD ITEM: the player's held item remains consumed during the
+  -- battle and is restored only when the battle.ended event fires.
+  run2.loader.modOptions = run2.loader.modOptions or {}
+  local goldOptions = run2.loader.modOptions.qol_toggles or {}
+  run2.loader.modOptions.qol_toggles = goldOptions
+  goldOptions.infinite_held_item = true
+  local heldMon = { item = "BERRY" }
+  local heldBattle = { party = { heldMon } }
+  Runtime.emit("battle.started", { battle = heldBattle })
+  heldMon.item = nil
+  T.eq(heldMon.item, nil,
+    "INFINITE HELD ITEM does not refill a consumed item mid-battle")
+  Runtime.emit("battle.ended", { battle = heldBattle, result = "win" })
+  T.eq(heldMon.item, "BERRY",
+    "INFINITE HELD ITEM restores the item after battle")
+  goldOptions.infinite_held_item = false
+
+  local goldWallet = { player = { money = 20000, coins = 0 } }
+  T.eq(ex2.buyCoins(goldWallet, 500), true,
+    "Gold coin purchase uses the nested wallet")
+  T.eq(goldWallet.player.money, 10000,
+    "Gold coin purchase deducts player money")
+  T.eq(goldWallet.player.coins, 500,
+    "Gold coin purchase adds player coins")
+  T.eq(ex2.isGoldCoinVendor({ map = { id = "GOLDENROD_GAME_CORNER" } },
+    { def = { scriptKey = "GameCornerCoinVendorScript" } }), true,
+    "Gold coin vendor is recognized through its script key")
+  T.eq(ex2.isGoldShipGangway({ map = { id = "OLIVINE_PORT" } },
+    { def = { scriptKey = "FastShipSailorAtGangwayScript" } }), true,
+    "Gold fast-ship gangway is recognized through its script key")
   T.neq(ex2.cardLabelLines, nil, "gen 2 exposes card label wrapping")
   if ex2.cardLabelLines then
     local Font = require("src.render.Font")
@@ -569,6 +601,8 @@ T.eq(ex.defaultFor("mouse_cam_lock"), false, "MOUSE CAM LOCK ships OFF")
 T.eq(ex.defaultFor("no_enc_dupes"), false, "NO ENCOUNTER DUPES ships OFF")
 T.eq(ex.defaultFor("instant_fish"), false, "INSTANT FISH ships OFF")
 T.eq(ex.defaultFor("heal_battle"), false, "HEAL AFTER BATTLE ships OFF")
+T.eq(ex.defaultFor("infinite_held_item"), false,
+     "INFINITE HELD ITEM ships OFF")
 T.eq(ex.defaultFor("turn_away_nurse"), false, "TURN AWAY (NURSE) ships OFF")
 T.eq(ex.defaultFor("auto_repel"), true, "AUTO-REPEL ships ON")
 T.eq(ex.defaultFor("bulk_mart"), false, "BULK MART ships OFF")
@@ -3776,6 +3810,36 @@ do
   T.eq(animBattle.fx.shake, nil, "screen shake cleared")
   T.eq(animBattle.fx.flash, nil, "screen flash cleared")
 
+  -- Gen 2 send-out animations must finish their HUD handoff when skipped.
+  -- The native BattleState path calls endSendOutAnim(true) after clearing the
+  -- runner; skipping straight to advanceQueue leaves show*Hud false forever.
+  for _, side in ipairs({ "player", "enemy" }) do
+    local hudKey = side == "player" and "showPlayerHud" or "showEnemyHud"
+    local finalized = false
+    local sendOutBattle = {
+      game = {
+        input = {
+          wasPressed = function(_, k) return k == "a" end,
+        },
+      },
+      anim = {},
+      afterSendOut = { side = side, mon = {} },
+      [hudKey] = false,
+      endSendOutAnim = function(self, skippedSendOut)
+        finalized = skippedSendOut == true
+        self.afterSendOut = nil
+        self[hudKey] = true
+      end,
+      advanceQueue = function() end,
+    }
+
+    skipped = ex.skipAnimOrAudio(sendOutBattle)
+    T.eq(skipped, true, "Gen 2 " .. side .. " send-out skips")
+    T.eq(finalized, true, "Gen 2 " .. side .. " send-out finalizes on skip")
+    T.eq(sendOutBattle[hudKey], true,
+      "Gen 2 " .. side .. " HUD is restored after send-out skip")
+  end
+
   -- 4. Waiting sound (cry / jingle / fanfare) skip on A-press
   local waitSoundStopped = false
   local cryBattle = {
@@ -3860,5 +3924,3 @@ end
 
 run.release()
 T.finish("qol_toggles")
-
-

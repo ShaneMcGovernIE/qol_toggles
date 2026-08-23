@@ -1,6 +1,6 @@
 # QoL Toggles
 
-Adds a QOL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save. Works on Red/Blue/Yellow **and Gold**: the toggles with a Gen 2 home are ported to Gold's second engine, and the Gen 1-cart-only ones (S.S. Anne, Game Corner, dark caves, Dramatic Shape camera, battle items, marts, TM/HM-learn) drop out of the list on a Gold boot instead of doing nothing.
+Adds a QOL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save. Works on Red/Blue/Yellow **and Gold**: the toggles use Gold's native battle, mart, script, world and summary-screen seams where the engines differ, while the Gen 2-only held-item toggle appears only on Gold.
 
 ## Try it
 
@@ -78,10 +78,10 @@ love .
 - **HEAL ON MAP CHANGE** — every map transition (routes, caves, warps,
   connections, even boot) fully heals the party: HP, status, and all
   PP.
-- **QUICK S.S. ANNE** — the Vermilion dock sailor prompts for your
-  ticket once; after that you walk straight onto the ship with no
-  dialogue and no stop.  The ship-sailed guard and the no-ticket
-  walk-back still apply.
+- **QUICK SHIP** — the Gen 1 Vermilion sailor, or Gold's Fast Ship
+  gangway, prompts for your ticket once; after that you board through the
+  native warp with no repeated dialogue.  Vanilla departure and ticket
+  gates still apply.
 - **LAST ITEM (M)** — in battle, press M to use the last item you used
   from the bag: balls throw at the foe, healing (potions, status cures,
   revives, ETHERs) opens the party screen so you pick the mon (ETHERs and
@@ -89,13 +89,14 @@ love .
   POKé FLUTE, POKé DOLL) work as usual.  A failed use shows the vanilla
   refusal text and does not spend your turn; with nothing remembered the
   bag opens instead.  The M key is rebindable from the Mods Hotkeys
-  submenu, like every other mod hotkey.
+  submenu, like every other mod hotkey.  Gold uses its native battle-item
+  and party-target flow.
 - **POKEBALL BONUS** — every time you buy your tenth POKé BALL at any
   mart (in one purchase or across several), the clerk throws in a free
   GREAT BALL: *"Thanks for your support, please take this free Great
   Ball."*  Only balls actually bought count — the five from Professor
   Oak and any found on the ground never do.  The counter carries across
-  shops and save sessions; the toggle ships OFF.
+  shops and save sessions on both generations; the toggle ships OFF.
 - **NO ENCOUNTER DUPES** — a wild roll never gives the same species
   twice in a row: the roll is re-rolled until it differs (best effort —
   an area with a single species still yields it).  Session-scoped.
@@ -106,6 +107,10 @@ love .
   conjure — and the Old Rod's always-catch is unchanged.
 - **HEAL AFTER BATTLE** — every battle that ends (win, run, catch,
   loss) fully heals the party: HP, status, and all PP.
+- **INFINITE HELD ITEM** — Gen 2 only. If a party Pokémon consumes a held
+  item in battle, its original held item returns after the battle. It stays
+  consumed for the rest of that battle, so a BERRY can heal once per battle.
+  Ships OFF.
 - **TURN AWAY (NURSE)** — after a Pokécenter nurse heals you, you turn
   away from the counter, so an A-mash walks you off instead of locking
   you back into her dialogue.  The Elm's-lab and Hall-of-Fame heal
@@ -126,7 +131,7 @@ love .
 - **BULK MART** — mart quantity prompts (BUY and SELL) open at 10
   instead of 1, still capped by money and bag space.  The mod
   manager's own numeric option boxes are never touched.
-- **BULK COINS** — the Celadon Game Corner clerk greets you, asks
+- **BULK COINS** — the Game Corner coin clerk greets you, asks
   "Would you like to purchase some COINS?", and offers 50, 500 or
   9,999 coins at a time (¥1000 / ¥10000 / ¥199980 — the vanilla
   20¥-per-coin rate) instead of the fixed 50.  Tiers that would
@@ -191,15 +196,14 @@ love .
   only change is the Gen VI update where STEEL stopped resisting GHOST and
   DARK.  Everything else is already identical, so the toggle swaps and
   adds those rows.  Works on Red and Gold.  Ships OFF.
-- **EXP BAR** — renders a Gen 2-style EXP bar below the player's HP bar
-  in battle, filling the arrow/underline groove in black as the active
-  Pokémon earns EXP toward its next level. Smoothly animates during battle
-  and loops through level-ups. Gen 1 only (Gold already renders a native
-  battle EXP bar). Ships OFF.
+- **EXP BAR** — shows the native Gold EXP bar below the player's HP bar, or
+  renders the matching modern bar on Red/Blue/Yellow, filling as the active
+  Pokémon earns EXP toward its next level. Ships OFF.
 - **PARTY SCROLL** — in the Pokémon STATS / Summary screen, pressing Up
   and Down cycles through your party Pokémon without closing the screen,
   refreshing the sprite, stats and cry while retaining the page you are on
-  (Stats or Moves & EXP).  Ships ON.
+  (Stats or Moves & EXP). Gold's native summary controls are gated by the
+  same toggle. Ships ON.
 - **INSTANT TEXT** — dialogue and menus type every glyph out at once
   instead of the typewriter pace, no matter what TEXT SPEED is set to.  The
   down-arrow / page prompts still gate on A like the cart.  Ships OFF.

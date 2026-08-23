@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.30.0] - 2026-08-23
+
+### Added
+
+- Gold compatibility for the complete toggle set. Gold now keeps every row
+  visible and routes the previously Gen 1-only behaviors through its native
+  BattleState, MartMenu, Game2 item flow, SummaryMenu, Gen2Compat talk seam,
+  map palette seam and script-backed world data: QUICK SHIP, LAST ITEM,
+  POKEBALL BONUS, BULK MART, BULK COINS, LIGHTS ON, AUTO BATTLER, EXP BAR,
+  PARTY SCROLL and FORGETTABLE HMs.
+- The Gen 2 checker is clean of compatibility errors; the remaining notes are
+  dynamic-require/static-analysis notes or documented Gold input behavior.
+- Added the Gen 2-only INFINITE HELD ITEM toggle: consumed party held items
+  are restored after battle, never during the battle.
+
+### Fixed
+
+- Gen 2 ANIM SKIP now finalizes skipped send-out animations so the active
+  Pokémon's name and HP HUD remain visible.
+
 ## [1.29.0] - 2026-08-20
 
 ### Added

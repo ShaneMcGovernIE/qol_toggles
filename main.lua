@@ -94,19 +94,30 @@ local Game = require("src.core.Game")
 local GameVersion = require("src.core.GameVersion")
 local Runtime = require("src.mods.Runtime")
 
--- 1 (Red/Blue/Yellow) or 2 (Gold).  Computed inside the entry chunk below:
--- GameVersion on a real Gold boot, else the live loader's generation (the
--- loader is Game.mods, assigned before mods run).  Older Gen 1 engines lack
--- GameVersion.isGold/generation, so the loader field is the portable source.
+-- 1 (Red/Blue/Yellow) or 2 (Gold/Silver/Crystal).  Computed inside the entry
+-- chunk below from the engine's generation API, with the older loader fallback
+-- kept for pre-generation GameVersion modules.
 local GEN2 = false
 
--- resolve GEN2 against the live boot: the loader's generation is set once
--- at construction and never changes, so reading it at entry time is final.
+-- Resolve GEN2 against the live boot: the generation is set once at
+-- construction and never changes, so reading it at entry time is final.
 local function detectGen2()
+  local loader = Game and Game.mods
+  if GameVersion and type(GameVersion.generation) == "function" then
+    local ok, generation = pcall(GameVersion.generation)
+    if ok and generation ~= nil then
+      if generation == 2 then return true end
+      -- An older headless loader can inject its generation while the
+      -- process-global version module still has its Gen 1 default.
+      if loader and loader.generation ~= nil then
+        return loader.generation == 2
+      end
+      return false
+    end
+  end
   if GameVersion and GameVersion.isGold and GameVersion.isGold() then
     return true
   end
-  local loader = Game and Game.mods
   if loader and loader.generation then return loader.generation == 2 end
   return false
 end
@@ -2122,7 +2133,9 @@ return function(mod)
   -- double the distance over a counter tile, then identify the nurse by
   -- either compatible shape.  The gen2 modules load lazily (this is only
   -- ever called from the Gold wrap) so the gen1 boot never touches them.
-  -- Pure, exported for the headless suite with stubbed engine modules.
+  -- Pure, exported for the headless suite.  Adapters may provide the two
+  -- geometry helpers directly; the live Gen 2 world falls back to its native
+  -- modules below.
   mod.exports.nurseAt = function(world)
     if not (world and world.player and world.vm and world.npcAt
             and world.map) then
@@ -2131,13 +2144,19 @@ return function(mod)
     if world:busy() then return nil end
     local p = world.player
     if p.moving then return nil end
-    local Map = require("src.world.gen2.Map")
-    local Permissions = require("src.world.gen2.Permissions")
-    local d = Map.DELTA[p.facing]
+    local delta = world.delta
+    if not delta then
+      delta = require("src.world.gen2.Map").DELTA
+    end
+    local isCounter = world.isCounter
+    if not isCounter then
+      isCounter = require("src.world.gen2.Permissions").isCounter
+    end
+    local d = delta[p.facing]
     if not d then return nil end
     local fx, fy = p.cellX + d[1], p.cellY + d[2]
     local ox, oy = fx, fy
-    if Permissions.isCounter(world.map:cellCollision(fx, fy)) then
+    if isCounter(world.map:cellCollision(fx, fy)) then
       ox, oy = p.cellX + d[1] * 2, p.cellY + d[2] * 2
     end
     local npc = world:npcAt(ox, oy)
@@ -2890,6 +2909,7 @@ return function(mod)
       "src.world.OverworldController",
       "src.world.Player", "src.world.gen2.StepEvents", "src.world.gen2.World",
       "src.world.gen2.Player", "src.battle.gen2.Catching",
+      "src.core.Game2",
       "src.pokemon.Pokemon", "src.battle.gen2.Mon",
       "src.battle.BattleState", "src.ui." .. "Summary" .. "Menu",
       "src.core.Sound", "src.render.TextBox",
@@ -4691,10 +4711,10 @@ return function(mod)
   -- UNLIMITED TMs / FORGETTABLE HMs: patched once per session like the
   -- PartyMenu wrap below -- the toggle reads through get() at use time.
   -- UNLIMITED TMs runs on both generations: Gen 1's ItemEffects.use remaps
-  -- the "learn" result (the consume signal) to "learnkept"; Gold's TM teach
+  -- the "learn" result (the consume signal) to "learnkept"; Gen 2's TM teach
   -- goes through Game2:useFieldItem -> learnMoveOn -> Game2:consumeItem, so
   -- the wrap skips consumeItem for a teaching TM while the toggle is on.
-  -- FORGETTABLE HMs has separate Gen 1 and Gold gates: Gold's live gate is
+  -- FORGETTABLE HMs has separate Gen 1 and Gen 2 gates: Gen 2's live gate is
   -- inside Game2:learnMoveOn / the battle's forget flow, not MoveLearnMenu.
   if GEN2 then
     local Game2 = require("src.core.Game2")
@@ -5048,33 +5068,14 @@ return function(mod)
     return mod.exports.submenuRename(next, game, items, mon, ctx)
   end)
 
-  -- ALWAYS CATCH: every ball lands, Master Ball style.  Gen 1's
-  -- Catching.attempt takes positional args and returns caught, shakes;
-  -- Gold's takes one opts table and returns caught, rate.  Gold's
-  -- catch.rate hook has the same shape as Gen 1's, so the wrap lands on
-  -- the write-through battle.gen2.Catching module instead.
-  if GEN2 then
-    local Catching2 = require("src.battle.gen2.Catching")
-    if not Catching2._qolTogglesAlwaysCatchInstalled then
-      Catching2._qolTogglesAlwaysCatchInstalled = true
-      local vanillaAttempt = Catching2.attempt
-      Catching2.attempt = function(opts)
-        if get("always_catch") then return true, 255 end
-        return vanillaAttempt(opts)
-      end
-    end
-  else
-    -- Gen 1's positional Catching.attempt (name built at runtime for the
-    -- gen2 scan; the gen2 arm wraps battle.gen2.Catching instead)
-    local Catching = require("src" .. ".battle.Catching")
-    local vanillaAttempt = Catching.attempt
-    Catching.attempt = function(ball, targetMon, targetDef, rng, rateOverride,
-                                opts)
-      if get("always_catch") then return true, 3 end
-      return vanillaAttempt(ball, targetMon, targetDef, rng, rateOverride,
-                            opts)
-    end
-  end
+  -- ALWAYS CATCH: every ball lands, Master Ball style.  Both battle engines
+  -- expose the same documented catch.rate hook at the battle decision point;
+  -- keep the generation-specific return value (Gen 1 shake count versus Gen 2
+  -- final catch rate) while leaving the private Catching modules untouched.
+  mod.hooks:wrap("catch.rate", function(next, ball, targetMon, targetDef, opts)
+    if get("always_catch") then return true, GEN2 and 255 or 3 end
+    return next(ball, targetMon, targetDef, opts)
+  end)
 
   -- POKEBALL BONUS: buying 10 POKé BALLS at any mart (in one or several
   -- purchases -- the counter is cumulative, stored in the slot's modData)

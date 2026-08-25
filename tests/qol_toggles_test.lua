@@ -35,6 +35,69 @@ TypeChart.load(Data)
 -- makes the repository-wide sandbox audit match the shipped mod scan.
 local loadRoot = arg and arg[1]
 
+-- ------------------------------------------------ Crystal Gen 2 detection
+-- The local engine checkout used by this suite predates the Crystal target, so
+-- mirror its version row just enough to exercise the public generation API.
+-- This deliberately leaves Game.mods unset during the mod boot: a Crystal
+-- entry must not depend on the Gen 1 Game facade's loader fallback.
+do
+  local GameVersion = require("src.core.GameVersion")
+  local savedVersion = GameVersion.get and GameVersion.get()
+  local savedMods = Game.mods
+  local savedCrystal = GameVersion.VERSIONS.crystal
+  local savedOrder = GameVersion.ORDER
+  local goldInfo = GameVersion.VERSIONS.gold
+  local crystalInfo = {}
+  for key, value in pairs(goldInfo or {}) do crystalInfo[key] = value end
+  crystalInfo.id = "crystal"
+  crystalInfo.label = "Crystal"
+  crystalInfo.engine = "crystal"
+  GameVersion.VERSIONS.crystal = crystalInfo
+  GameVersion.ORDER = { "red", "blue", "yellow", "gold", "silver", "crystal" }
+  GameVersion.set("crystal")
+  Game.mods = nil
+
+  local fresh = require("tests.modkit.fixtures").fresh()
+  local runCrystal = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
+    { data = fresh, generation = 2, root = loadRoot })
+  T.eq(runCrystal.mod and runCrystal.mod.state, "loaded",
+    "loads on Crystal's Gen 2 target")
+  T.eq(#runCrystal.errors, 0, "Crystal-shaped Gen 2 load has no boot errors")
+
+  local exCrystal = runCrystal.loader.exports.qol_toggles
+  T.eq(T.record.hooks(runCrystal.loader):depth("catch.rate"), 1,
+    "Crystal installs ALWAYS CATCH on the shared catch hook")
+
+  runCrystal.loader.modOptions.qol_toggles =
+    runCrystal.loader.modOptions.qol_toggles or {}
+  runCrystal.loader.modOptions.qol_toggles.always_catch = true
+  Game.mods = runCrystal.loader
+  local caught, rate = Runtime.call("catch.rate",
+    function() return false, 0 end,
+    "POKE_BALL", nil, nil, {})
+  T.eq(caught, true, "Crystal ALWAYS CATCH forces the catch result")
+  T.eq(rate, 255, "Crystal ALWAYS CATCH supplies a guaranteed rate")
+
+  local Game2 = require("src.core.Game2")
+  local inventory = { TM_FIX = 1 }
+  local crystalGame = {
+    data = { items = { TM_FIX = { teaches = "FIX_MOVE" } } },
+    save = { inventory = inventory },
+  }
+  Game2.consumeItem(crystalGame, "TM_FIX")
+  T.eq(inventory.TM_FIX, 1,
+    "Crystal UNLIMITED TMs keeps a teaching machine in the bag")
+
+  if exCrystal and exCrystal.clearInstallGuards then
+    exCrystal.clearInstallGuards()
+  end
+  runCrystal.release()
+  Game.mods = savedMods
+  GameVersion.VERSIONS.crystal = savedCrystal
+  GameVersion.ORDER = savedOrder
+  if GameVersion.set then GameVersion.set(savedVersion or "red") end
+end
+
 -- ------------------------------------------------ Gen 2 load gate
 -- Runs FIRST: a fresh fixture dataset (not the shared Data) so the gen2
 -- registries do not collide with the gen1 load below, and the mod's install
@@ -1621,12 +1684,19 @@ do
   local rng255 = function() return 255 end
 
   bucket.always_catch = true
-  local caught, shakes = Catching.attempt("POKE_BALL", mon, def, rng255)
+  local caught, shakes = Runtime.call("catch.rate", function(ball, targetMon,
+      targetDef, opts)
+    return Catching.attempt(ball, targetMon, targetDef, opts.rng,
+      opts.rateOverride, opts)
+  end, "POKE_BALL", mon, def, { rng = rng255 })
   T.eq(caught, true, "ALWAYS CATCH: every ball catches")
   T.eq(shakes, 3, "full three-shake chain")
 
   bucket.always_catch = false
-  caught = Catching.attempt("POKE_BALL", mon, def, rng255)
+  caught = Runtime.call("catch.rate", function(ball, targetMon, targetDef, opts)
+    return Catching.attempt(ball, targetMon, targetDef, opts.rng,
+      opts.rateOverride, opts)
+  end, "POKE_BALL", mon, def, { rng = rng255 })
   T.eq(caught, false, "toggle OFF: the stock roll runs (255 roll > rate 45)")
 end
 
@@ -2045,8 +2115,8 @@ do
   -- Gen 2: the nurse lookup replicates the engine's counter-doubled
   -- CheckFacingObject (nurses stand behind COLL_COUNTER tiles, so the
   -- facing cell is doubled) and matches the shared PokecenterNurseScript
-  -- key.  The real gen2 Map/Permissions modules load headless; the world
-  -- is a stub.
+  -- key.  The fixture supplies the pure geometry/collision helpers so this
+  -- Gen 1 harness does not ask its sandbox to load Gen 2 engine modules.
   local function stubWorld(npc, collision, opts)
     opts = opts or {}
     return {
@@ -2056,6 +2126,9 @@ do
       busy = function() return opts.busy or false end,
       map = { cellCollision = function() return collision end },
       npcAt = function() return npc end,
+      delta = { up = { 0, -1 }, down = { 0, 1 },
+                left = { -1, 0 }, right = { 1, 0 } },
+      isCounter = function(value) return value == 0x90 end,
     }
   end
   local nurse = { def = { scriptKey = "PokecenterNurseScript", index = 7 } }

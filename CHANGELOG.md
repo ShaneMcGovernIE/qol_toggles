@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.30.2] - 2026-08-26
+
+### Fixed
+
+- Gen 2 detection now recognizes Silver and Crystal, so their native QOL
+  compatibility paths install correctly.
+- ALWAYS CATCH now uses the shared Gen 2 catch-rate hook and guarantees catches
+  in Silver and Crystal.
+- UNLIMITED TMs now preserves teaching machines in Silver and Crystal.
+- Gen 2 install guards are cleared on mod reload, preventing stale hooks.
+
 ## [1.30.1] - 2026-08-23
 
 ### Fixed

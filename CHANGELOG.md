@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.4] - 2026-08-26
+
+### Fixed
+
+- Gen 2 detection now trusts the live game owner during boot and ignores
+  leftover Gen 2 namespaces on a reused Gen 1 data table.
+
 ## [1.30.3] - 2026-08-26
 
 ### Fixed

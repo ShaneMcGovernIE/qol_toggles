@@ -98,9 +98,11 @@ do
   -- authoritative Gen 2 shape; AUTO BATTLER must not fall back to the Gen 1
   -- screen contract in that window.
   local savedGameData = Game.data
-  Game.data = Data
-  local savedGen2Trainers = Game.data.gen2Trainers
-  Game.data.gen2Trainers = {}
+  local Game2Module = require("src.core.Game2")
+  local staleData = require("tests.modkit.fixtures").fresh()
+  staleData.gen2Trainers = {}
+  local liveCrystalGame = Game2Module.new()
+  liveCrystalGame.data = staleData
   GameVersion.set("red")
   -- Sdk.loadMod normally models an isolated loader with no live game.  Inject
   -- the same Game2 service that the production boot hands to Loader so this
@@ -109,12 +111,12 @@ do
   local vanillaLoaderNew = Loader.new
   Loader.new = function(opts)
     local loader = vanillaLoaderNew(opts)
-    loader.game = { data = Data }
+    loader.game = liveCrystalGame
     return loader
   end
   local okStale, staleCrystal = pcall(T.sdk.loadMod,
     loadRoot and "." or "mods/qol_toggles",
-    { data = require("tests.modkit.fixtures").fresh(), generation = 2,
+    { data = staleData, generation = 2,
       root = loadRoot })
   Loader.new = vanillaLoaderNew
   if not okStale then error(staleCrystal, 0) end
@@ -150,7 +152,40 @@ do
     staleEx.clearInstallGuards()
   end
   staleCrystal.release()
-  Game.data.gen2Trainers = savedGen2Trainers
+
+  -- A reused Gen 1 Data table may still carry a Gen 2 namespace while the
+  -- live Gen 1 game is loading.  That stale global must not flip the mod back
+  -- to the Gen 2 battle-screen contract.
+  local staleGen1Data = require("tests.modkit.fixtures").fresh()
+  staleGen1Data.gen2Trainers = {}
+  Game.data = staleGen1Data
+  GameVersion.set("red")
+  Game.mods = nil
+  local redData = require("tests.modkit.fixtures").fresh()
+  local vanillaLoaderNewRed = Loader.new
+  Loader.new = function(opts)
+    local loader = vanillaLoaderNewRed(opts)
+    loader.game = { data = redData }
+    return loader
+  end
+  local okRed, staleRed = pcall(T.sdk.loadMod,
+    loadRoot and "." or "mods/qol_toggles",
+    { data = redData, generation = 1, root = loadRoot })
+  Loader.new = vanillaLoaderNewRed
+  if not okRed then error(staleRed, 0) end
+  staleRed.loader.modOptions.qol_toggles =
+    staleRed.loader.modOptions.qol_toggles or {}
+  staleRed.loader.modOptions.qol_toggles.auto_battler = true
+  local redEx = staleRed.loader.exports.qol_toggles
+  T.eq(redEx.autoBattleShouldAct({
+    phase = "menu", player = { mon = { hp = 20 } }, enemy = {},
+  }), true,
+    "a stale Gen 2 namespace does not change the Gen 1 battle contract")
+  if redEx and redEx.clearInstallGuards then
+    redEx.clearInstallGuards()
+  end
+  staleRed.release()
+
   Game.data = savedGameData
   Game.mods = savedMods
   GameVersion.VERSIONS.crystal = savedCrystal

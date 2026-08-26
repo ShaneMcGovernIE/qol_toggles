@@ -116,7 +116,6 @@ local function detectGen2(mod)
   -- tab selected for a moment.
   local liveGame = mod and mod.game
   if liveGame and hasGen2Data(liveGame.data) then return true end
-  if Game and hasGen2Data(Game.data) then return true end
   if GameVersion and type(GameVersion.generation) == "function" then
     local ok, generation = pcall(GameVersion.generation)
     if ok and generation ~= nil then

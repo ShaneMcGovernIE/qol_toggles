@@ -92,6 +92,66 @@ do
     exCrystal.clearInstallGuards()
   end
   runCrystal.release()
+
+  -- Crystal's Game2 boot can reach the mod before a stale process-wide
+  -- GameVersion value has been refreshed.  The live game data is still the
+  -- authoritative Gen 2 shape; AUTO BATTLER must not fall back to the Gen 1
+  -- screen contract in that window.
+  local savedGameData = Game.data
+  Game.data = Data
+  local savedGen2Trainers = Game.data.gen2Trainers
+  Game.data.gen2Trainers = {}
+  GameVersion.set("red")
+  -- Sdk.loadMod normally models an isolated loader with no live game.  Inject
+  -- the same Game2 service that the production boot hands to Loader so this
+  -- is a real stale-version boot, not a fixture-only shortcut.
+  local Loader = require("src.mods.Loader")
+  local vanillaLoaderNew = Loader.new
+  Loader.new = function(opts)
+    local loader = vanillaLoaderNew(opts)
+    loader.game = { data = Data }
+    return loader
+  end
+  local okStale, staleCrystal = pcall(T.sdk.loadMod,
+    loadRoot and "." or "mods/qol_toggles",
+    { data = require("tests.modkit.fixtures").fresh(), generation = 2,
+      root = loadRoot })
+  Loader.new = vanillaLoaderNew
+  if not okStale then error(staleCrystal, 0) end
+  T.eq(staleCrystal.mod and staleCrystal.mod.state, "loaded",
+    "loads when Crystal's live data is Gen 2 before GameVersion catches up")
+  staleCrystal.loader.modOptions.qol_toggles =
+    staleCrystal.loader.modOptions.qol_toggles or {}
+  staleCrystal.loader.modOptions.qol_toggles.auto_battler = true
+  local staleScreen = {
+    phase = "menu",
+    game = { data = { moves = {
+      FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
+    } } },
+    battle = {
+      player = {
+        hp = 20, moves = { { id = "FIX_TACKLE", pp = 10 } },
+        dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
+        statExp = {}, stats = { hp = 20 },
+      },
+      enemy = {},
+    },
+    submit = function(self, action) self.submitted = action end,
+  }
+  local staleEx = staleCrystal.loader.exports.qol_toggles
+  T.eq(staleEx.autoBattleShouldAct(staleScreen), true,
+    "Crystal AUTO BATTLER uses the Gen 2 battle screen contract")
+  require("src.ui.gen2.BattleState").update(staleScreen, 0)
+  T.eq(staleScreen.submitted and staleScreen.submitted.kind, "move",
+    "Crystal AUTO BATTLER submits a move through the live battle screen")
+  T.eq(staleScreen.submitted and staleScreen.submitted.move, "FIX_TACKLE",
+    "Crystal AUTO BATTLER submits the selected move")
+  if staleEx and staleEx.clearInstallGuards then
+    staleEx.clearInstallGuards()
+  end
+  staleCrystal.release()
+  Game.data.gen2Trainers = savedGen2Trainers
+  Game.data = savedGameData
   Game.mods = savedMods
   GameVersion.VERSIONS.crystal = savedCrystal
   GameVersion.ORDER = savedOrder

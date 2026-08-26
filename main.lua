@@ -101,8 +101,22 @@ local GEN2 = false
 
 -- Resolve GEN2 against the live boot: the generation is set once at
 -- construction and never changes, so reading it at entry time is final.
-local function detectGen2()
+local function hasGen2Data(data)
+  return type(data) == "table"
+    and (data.gen2Trainers ~= nil or data.gen2Maps ~= nil
+      or data.gen2BattleAnims ~= nil)
+end
+
+local function detectGen2(mod)
   local loader = Game and Game.mods
+  -- Game2 injects the live service into the mod API before the entry chunk
+  -- runs, while its `mods` field is only assigned after loading completes.
+  -- The generated Gen 2 namespaces are therefore the reliable boot signal
+  -- during Crystal's entry phase, even if GameVersion still has its previous
+  -- tab selected for a moment.
+  local liveGame = mod and mod.game
+  if liveGame and hasGen2Data(liveGame.data) then return true end
+  if Game and hasGen2Data(Game.data) then return true end
   if GameVersion and type(GameVersion.generation) == "function" then
     local ok, generation = pcall(GameVersion.generation)
     if ok and generation ~= nil then
@@ -456,7 +470,7 @@ local MAP_LOCATION_NAMES = {
 }
 
 return function(mod)
-  GEN2 = detectGen2()
+  GEN2 = detectGen2(mod)
   local Strings = require("src.core.Strings")
   local Font = require("src.render.Font")
   local Theme = require("src.ui.Theme")

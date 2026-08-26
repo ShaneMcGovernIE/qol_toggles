@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.30.3] - 2026-08-26
+
+### Fixed
+
+- AUTO BATTLER now recognizes Crystal from the live Gen 2 game data during
+  boot, so the toggle selects and submits Palace-style moves in Crystal
+  battles even when the process-wide version value is briefly stale.
+
 ## [1.30.2] - 2026-08-26
 
 ### Fixed

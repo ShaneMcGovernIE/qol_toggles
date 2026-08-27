@@ -1,0 +1,5 @@
+options.lua
+options.lua.bak
+options.lua.tmp
+graphify-out/
+.DS_Store

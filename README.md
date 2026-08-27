@@ -1,6 +1,6 @@
 # QoL Toggles
 
-Adds a QOL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save. Works on Red/Blue/Yellow **and Gold**: the toggles use Gold's native battle, mart, script, world and summary-screen seams where the engines differ, while the Gen 2-only held-item toggle appears only on Gold.
+Adds a QOL TOGGLES row to OPTIONS that opens a submenu with quality-of-life switches, each persisted with your save. Works on Red/Blue/Yellow **and Gold**: every toggle is available on both generations, using Gold's native battle, mart, script, world and summary-screen seams where the engines differ.
 
 ## Try it
 
@@ -32,9 +32,9 @@ love .
   cart's own eight-row limit, so a Pokémon that can learn many field
   moves never pushes rows off the screen — the extras simply don't fit,
   exactly like a full moveset on the cart.
-- **BADGELESS MOVES** — the badge gates come off: FLY, SURF, CUT,
-  STRENGTH and FLASH all work without their badges.  Pairs with FIELD
-  MOVES ALL for a no-badge, no-moveset run.
+- **BADGELESS HMs** — the badge gates come off: FLY, SURF, CUT,
+  STRENGTH and FLASH (plus WATERFALL and WHIRLPOOL on Gen 2) work without
+  their badges.  Pairs with FIELD MOVES ALL for a no-badge, no-moveset run.
 - **HM ITEM REQUIRED** — the FIELD MOVES ALL extras for HM moves only
   appear once you actually hold the HM item: no CUT on the Cascade Badge
   alone when the CUT HM is still on the S.S. Anne.  (Moves a Pokémon
@@ -158,21 +158,6 @@ love .
   battle camera no longer follows the mouse.  Only the mouse steering is
   cut — the right stick, a touch drag and the zoom still work.  The toggle
   is inert (nothing to gate) when Dramatic Shape is absent.
-- **AUTO BATTLER** — when ON, your Pokémon chooses its own move in
-  Battle Palace style: Emerald's Attack / Defense / Support probabilities
-  and low-HP table are used, and the selected category is passed through
-  Gen 1's normal AI scoring. Gen 1 has no Natures, so the mod derives an
-  approximate style from the four DVs and stat EXP. Items, switching, forced
-  moves and trainer AI are unchanged. The low-HP profile latches until that
-  Pokémon switches out. When the selected category is empty, a usable move
-  from another category is used instead — the turn is never wasted on the
-  Emerald "couldn't use its power" skip, because Gen 1's missing target
-  data makes empty categories far more common than in Emerald and the skip
-  would spam that message. Out of PP entirely, the Pokémon Struggles like
-  vanilla Gen 1 (recoil included) instead of skipping the turn. If the
-  toggle is switched off, the original player
-  action proceeds. Ships OFF. This applies to free player turns in ordinary
-  wild/trainer battles; link battles remain synchronized and unchanged.
 - **MAP LOCATION** — when ON, entering a new area shows its name in the
   same toast style as AUTO-REPEL's refill banner: a small box near the
   top that fades out on its own while you keep walking.  Names come from
@@ -233,8 +218,7 @@ love .
   so toggles survive restarts and save files.  POISON SAVE, FULL HEAL
   CATCH, FIELD MOVES ALL, HM ITEM REQUIRED, UNLIMITED TMs, FORGETTABLE
   HMs, REMEMBER CURSOR, AUTO-REPEL, REMEMBER MOVE, MAP LOCATION,
-  RENAME and PARTY SCROLL ship ON; the rest, including AUTO BATTLER and
-  EXP BAR, ship OFF.
+  RENAME and PARTY SCROLL ship ON; the rest, including EXP BAR, ship OFF.
 - Toggling REPEL applies immediately — you can flip it in the field
   without using an item.
 - In the 2×2 QOL TOGGLES cards, labels wrap only between whole words. Any

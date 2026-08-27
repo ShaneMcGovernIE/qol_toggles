@@ -93,100 +93,6 @@ do
   end
   runCrystal.release()
 
-  -- Crystal's Game2 boot can reach the mod before a stale process-wide
-  -- GameVersion value has been refreshed.  The live game data is still the
-  -- authoritative Gen 2 shape; AUTO BATTLER must not fall back to the Gen 1
-  -- screen contract in that window.
-  local savedGameData = Game.data
-  local Game2Module = require("src.core.Game2")
-  local staleData = require("tests.modkit.fixtures").fresh()
-  staleData.gen2Trainers = {}
-  local liveCrystalGame = Game2Module.new()
-  liveCrystalGame.data = staleData
-  GameVersion.set("red")
-  -- Sdk.loadMod normally models an isolated loader with no live game.  Inject
-  -- the same Game2 service that the production boot hands to Loader so this
-  -- is a real stale-version boot, not a fixture-only shortcut.
-  local Loader = require("src.mods.Loader")
-  local vanillaLoaderNew = Loader.new
-  Loader.new = function(opts)
-    local loader = vanillaLoaderNew(opts)
-    loader.game = liveCrystalGame
-    return loader
-  end
-  local okStale, staleCrystal = pcall(T.sdk.loadMod,
-    loadRoot and "." or "mods/qol_toggles",
-    { data = staleData, generation = 2,
-      root = loadRoot })
-  Loader.new = vanillaLoaderNew
-  if not okStale then error(staleCrystal, 0) end
-  T.eq(staleCrystal.mod and staleCrystal.mod.state, "loaded",
-    "loads when Crystal's live data is Gen 2 before GameVersion catches up")
-  staleCrystal.loader.modOptions.qol_toggles =
-    staleCrystal.loader.modOptions.qol_toggles or {}
-  staleCrystal.loader.modOptions.qol_toggles.auto_battler = true
-  local staleScreen = {
-    phase = "menu",
-    game = { data = { moves = {
-      FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
-    } } },
-    battle = {
-      player = {
-        hp = 20, moves = { { id = "FIX_TACKLE", pp = 10 } },
-        dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
-        statExp = {}, stats = { hp = 20 },
-      },
-      enemy = {},
-    },
-    submit = function(self, action) self.submitted = action end,
-  }
-  local staleEx = staleCrystal.loader.exports.qol_toggles
-  T.eq(staleEx.autoBattleShouldAct(staleScreen), true,
-    "Crystal AUTO BATTLER uses the Gen 2 battle screen contract")
-  require("src.ui.gen2.BattleState").update(staleScreen, 0)
-  T.eq(staleScreen.submitted and staleScreen.submitted.kind, "move",
-    "Crystal AUTO BATTLER submits a move through the live battle screen")
-  T.eq(staleScreen.submitted and staleScreen.submitted.move, "FIX_TACKLE",
-    "Crystal AUTO BATTLER submits the selected move")
-  if staleEx and staleEx.clearInstallGuards then
-    staleEx.clearInstallGuards()
-  end
-  staleCrystal.release()
-
-  -- A reused Gen 1 Data table may still carry a Gen 2 namespace while the
-  -- live Gen 1 game is loading.  That stale global must not flip the mod back
-  -- to the Gen 2 battle-screen contract.
-  local staleGen1Data = require("tests.modkit.fixtures").fresh()
-  staleGen1Data.gen2Trainers = {}
-  Game.data = staleGen1Data
-  GameVersion.set("red")
-  Game.mods = nil
-  local redData = require("tests.modkit.fixtures").fresh()
-  local vanillaLoaderNewRed = Loader.new
-  Loader.new = function(opts)
-    local loader = vanillaLoaderNewRed(opts)
-    loader.game = { data = redData }
-    return loader
-  end
-  local okRed, staleRed = pcall(T.sdk.loadMod,
-    loadRoot and "." or "mods/qol_toggles",
-    { data = redData, generation = 1, root = loadRoot })
-  Loader.new = vanillaLoaderNewRed
-  if not okRed then error(staleRed, 0) end
-  staleRed.loader.modOptions.qol_toggles =
-    staleRed.loader.modOptions.qol_toggles or {}
-  staleRed.loader.modOptions.qol_toggles.auto_battler = true
-  local redEx = staleRed.loader.exports.qol_toggles
-  T.eq(redEx.autoBattleShouldAct({
-    phase = "menu", player = { mon = { hp = 20 } }, enemy = {},
-  }), true,
-    "a stale Gen 2 namespace does not change the Gen 1 battle contract")
-  if redEx and redEx.clearInstallGuards then
-    redEx.clearInstallGuards()
-  end
-  staleRed.release()
-
-  Game.data = savedGameData
   Game.mods = savedMods
   GameVersion.VERSIONS.crystal = savedCrystal
   GameVersion.ORDER = savedOrder
@@ -220,8 +126,8 @@ do
   local shown = {}
   for _, row in ipairs(rows) do shown[row.id] = true end
   for _, id in ipairs({ "quick_ssanne", "bulk_coins", "lights_on",
-                        "mouse_cam_lock", "last_item", "auto_battler",
-                        "free_great_ball", "bulk_mart",
+                        "mouse_cam_lock", "last_item",
+                        "battery_indicator", "free_great_ball", "bulk_mart",
                         "forgettable_hms", "exp_bar" }) do
     T.eq(shown[id], true, "gen 2 keeps the Gold-compatible toggle " .. id)
   end
@@ -525,6 +431,40 @@ T.neq(ex, nil, "exports reachable")
 T.neq(TextBoxModule.update, vanillaTextBoxUpdate,
   "INSTANT TEXT wraps the shared TextBox update")
 
+-- A local F5/hot reload replaces Runtime's hook bus but keeps the live Game
+-- object.  The battery hook must be registered on the new bus as well; a
+-- stale per-game install flag must not make the indicator disappear.
+do
+  local savedMods = Game.mods
+  local savedGetTime = T.love.timer.getTime
+  local savedPowerInfo = T.love.system.getPowerInfo
+  local savedRectangle = T.love.graphics.rectangle
+  local rectangles = 0
+  T.love.timer.getTime = function() return 2 end
+  T.love.system.getPowerInfo = function() return "battery", 73 end
+  T.love.graphics.rectangle = function(...)
+    rectangles = rectangles + 1
+  end
+
+  local reloaded = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles",
+    { data = {}, generation = 1, root = loadRoot })
+  reloaded.loader.modOptions.qol_toggles =
+    reloaded.loader.modOptions.qol_toggles or {}
+  reloaded.loader.modOptions.qol_toggles.battery_indicator = "top_right"
+  Game.mods = reloaded.loader
+  Runtime.call("render.hud", function() return true end,
+    { stack = { states = { { screenId = "Overworld" } } } },
+    { gameWidth = 160, gameHeight = 144 })
+  T.check(rectangles > 0,
+    "battery indicator survives a local reload of the render hook bus")
+
+  reloaded.release()
+  Game.mods = savedMods
+  T.love.timer.getTime = savedGetTime
+  T.love.system.getPowerInfo = savedPowerInfo
+  T.love.graphics.rectangle = savedRectangle
+end
+
 -- the toggles read through Game.mods (the loader), which the headless
 -- harness does not wire by itself
 Game.mods = run.loader
@@ -603,6 +543,7 @@ end
 local row = findRow({})
 T.neq(row, nil, "the QOL TOGGLES row joins the options menu")
 T.eq(row.label, "QOL TOGGLES", "row label")
+T.eq(ex.autoBattleAction, nil, "QOL no longer exports AUTO BATTLER")
 
 -- ------------------------------------------------ the submenu toggles
 
@@ -610,6 +551,10 @@ local state = {}
 local rows = ex.toggleRows(
   function(k) return state[k] end,
   function(k, v) state[k] = v end)
+for _, optionRow in ipairs(rows) do
+  T.check(optionRow.id ~= "auto_battler",
+          "QOL submenu no longer includes AUTO BATTLER")
+end
 
 T.eq(#rows, 44, "forty-four toggles in the submenu")
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
@@ -652,7 +597,9 @@ T.eq(rows[31].id, "remember_move", "toggle 31: remember move")
 T.eq(rows[32].id, "keep_money", "toggle 32: keep money")
 T.eq(rows[33].id, "auto_cut", "toggle 33: auto cut")
 T.eq(rows[34].id, "run_hold_b", "toggle 34: run (hold B)")
-T.eq(rows[35].id, "auto_battler", "toggle 35: Battle Palace auto battler")
+T.eq(rows[35].id, "battery_indicator", "toggle 35: battery indicator")
+T.eq(rows[35].label, "BATTERY INDICATOR", "toggle 35: battery indicator label")
+T.eq(rows[35].cycle, true, "toggle 35: battery indicator is a cycle row")
 T.eq(rows[36].id, "map_location", "toggle 36: map location toast")
 T.eq(rows[37].id, "rename", "toggle 37: rename from the party menu")
 T.eq(rows[38].id, "modern_types", "toggle 38: modern type chart")
@@ -661,13 +608,85 @@ T.eq(rows[39].label, "EXP BAR", "toggle 39: EXP BAR label")
 T.eq(rows[40].id, "party_scroll", "toggle 40: party scroll")
 T.eq(rows[40].label, "PARTY SCROLL", "toggle 40: PARTY SCROLL label")
 T.eq(rows[41].id, "instant_text", "toggle 41: instant text")
-T.eq(rows[41].label, "INSTANT TEXT", "toggle 41: INSTANT TEXT label")
+T.eq(rows[41].label, "INSTANT TEXT", "toggle 41: instant text label")
 T.eq(rows[42].id, "hold_to_scroll", "toggle 42: hold to scroll")
 T.eq(rows[42].label, "HOLD TO SCROLL", "toggle 42: HOLD TO SCROLL label")
 T.eq(rows[43].id, "anim_skip", "toggle 43: anim skip")
-T.eq(rows[43].label, "ANIM SKIP", "toggle 43: ANIM SKIP label")
-T.eq(rows[44].id, "sand_free", "toggle 44: sand free")
-T.eq(rows[44].label, "SAND FREE", "toggle 44: SAND FREE label")
+T.eq(rows[43].label, "ANIM SKIP", "toggle 43: anim skip label")
+T.neq(rows[44], nil, "toggle 44 exists")
+if rows[44] then
+  T.eq(rows[44].id, "sand_free", "toggle 44: sand free")
+  T.eq(rows[44].label, "SAND FREE", "toggle 44: SAND FREE label")
+end
+
+local batteryRow = rows[35]
+if batteryRow then
+  state.battery_indicator = false
+  T.eq(batteryRow.value(), "OFF", "battery indicator starts OFF")
+  batteryRow.step()
+  T.eq(state.battery_indicator, "top_right",
+       "battery indicator cycles to TOP RIGHT")
+  T.eq(batteryRow.value(), "TOP RIGHT",
+       "battery indicator labels TOP RIGHT")
+  batteryRow.step()
+  T.eq(state.battery_indicator, "start_menu",
+       "battery indicator cycles to START MENU")
+  T.eq(batteryRow.value(), "START MENU",
+       "battery indicator labels START MENU")
+  batteryRow.step()
+  T.eq(state.battery_indicator, false,
+       "battery indicator wraps back to OFF")
+end
+
+T.eq(type(ex.batteryMode), "function", "battery mode helper is exported")
+T.eq(type(ex.batteryLabel), "function", "battery label helper is exported")
+T.eq(type(ex.batteryVisible), "function",
+     "battery placement helper is exported")
+T.eq(type(ex.batteryLayout), "function", "battery layout helper is exported")
+if ex.batteryMode and ex.batteryLabel and ex.batteryVisible
+   and ex.batteryLayout then
+  T.eq(ex.batteryMode(nil), false, "battery mode defaults to OFF")
+  T.eq(ex.batteryMode("top_right"), "top_right",
+       "battery mode accepts TOP RIGHT")
+  T.eq(ex.batteryMode("start_menu"), "start_menu",
+       "battery mode accepts START MENU")
+  T.eq(ex.batteryMode("unexpected"), false,
+       "unknown battery modes are safely OFF")
+  T.eq(ex.batteryLabel(false), "OFF", "battery label: OFF")
+  T.eq(ex.batteryLabel("top_right"), "TOP RIGHT",
+       "battery label: TOP RIGHT")
+  T.eq(ex.batteryLabel("start_menu"), "START MENU",
+       "battery label: START MENU")
+  T.eq(ex.batteryVisible("top_right", "Overworld"), true,
+       "TOP RIGHT battery is visible over gameplay")
+  T.eq(ex.batteryVisible("top_right", "StartMenu"), true,
+       "TOP RIGHT battery remains visible over the Start menu")
+  T.eq(ex.batteryVisible("start_menu", "StartMenu"), true,
+       "START MENU battery is visible on the Gen 1 Start menu")
+  T.eq(ex.batteryVisible("start_menu", "Gen2StartMenu"), true,
+       "START MENU battery is visible on the Gen 2 Start menu")
+  T.eq(ex.batteryVisible("start_menu", "Overworld"), false,
+       "START MENU battery is hidden during gameplay")
+  local topBattery = ex.batteryLayout("top_right", "battery", 73)
+  T.neq(topBattery, nil, "battery layout exists for a reported percentage")
+  if topBattery then
+    T.eq(topBattery.x, 140, "TOP RIGHT battery is screen aligned")
+    T.eq(topBattery.y, 4, "TOP RIGHT battery sits below the edge")
+    T.eq(topBattery.bars, 3, "battery layout fills three bars at 73 percent")
+    T.eq(topBattery.charging, false, "battery layout marks discharging state")
+  end
+  local menuBattery = ex.batteryLayout("start_menu", "charging", 26)
+  T.eq(menuBattery and menuBattery.x, 136,
+       "START MENU battery sits at the bottom right")
+  T.eq(menuBattery and menuBattery.y, 128,
+       "START MENU battery sits below the final menu label")
+  T.eq(menuBattery and menuBattery.bars, 2,
+       "battery layout fills two bars at 26 percent")
+  T.eq(menuBattery and menuBattery.charging, true,
+       "battery layout marks charging state")
+  T.eq(ex.batteryLayout("top_right", "unknown", nil), nil,
+       "battery layout hides when the device cannot report power")
+end
 
 -- ------------------------------------------------ the two-column card grid
 
@@ -724,7 +743,7 @@ if ex.cardLabelLines and ex.cardGeometry and ex.gridMove then
     if badgelessRow.cardTickers then
       T.eq(badgelessRow.cardLines[1], "BADGELESS",
            "the long word remains one card line")
-      T.eq(badgelessRow.cardLines[2], "MOVES",
+      T.eq(badgelessRow.cardLines[2], "HMs",
            "the following word remains its own card line")
       T.neq(badgelessRow.cardTickers[1], nil,
             "the overlong card line gets ticker metadata")
@@ -769,8 +788,9 @@ T.eq(ex.defaultFor("lights_on"), false, "LIGHTS ON ships OFF")
 T.eq(ex.defaultFor("remember_move"), true, "REMEMBER MOVE ships ON")
 T.eq(ex.defaultFor("keep_money"), false, "KEEP MONEY ships OFF")
 T.eq(ex.defaultFor("auto_cut"), false, "AUTO CUT ships OFF")
-T.eq(ex.defaultFor("run_hold_b"), false, "RUN (HOLD B) ships OFF")
-T.eq(ex.defaultFor("auto_battler"), false, "AUTO BATTLER ships OFF")
+  T.eq(ex.defaultFor("run_hold_b"), false, "RUN (HOLD B) ships OFF")
+  T.eq(ex.defaultFor("battery_indicator"), false,
+       "BATTERY INDICATOR ships OFF")
 T.eq(ex.defaultFor("map_location"), true, "MAP LOCATION ships ON")
 T.eq(ex.defaultFor("rename"), true, "RENAME ships ON")
 T.eq(ex.defaultFor("modern_types"), false, "MODERN TYPES ships OFF")
@@ -832,7 +852,8 @@ for i, r in ipairs(rows) do
   T.eq(r.value(), "OFF", "row " .. i .. " defaults OFF in a bare stub state")
   T.eq(r.step(), true, "row " .. i .. " steps")
   if r.cycle then
-    T.eq(r.value(), "0x", "cycle row " .. i .. " advances to 0x")
+    local expected = r.id == "battery_indicator" and "TOP RIGHT" or "0x"
+    T.eq(r.value(), expected, "cycle row " .. i .. " advances")
     r.step() -- move on so the walk below lands back on OFF
     r.step()
     r.step()
@@ -1079,9 +1100,6 @@ end
 
 local bucket = run.loader.modOptions.qol_toggles
 if not bucket then bucket = {}; run.loader.modOptions.qol_toggles = bucket end
-
--- The pure chooser and autoBattleAction seam are exercised here; the
--- engine's resolveTurn integration is pinned by the engine battle suite.
 
 do
   local flyer = { learnset = { { level = 1, move = "FIX_TACKLE" } },
@@ -2626,8 +2644,7 @@ for _, spec in ipairs({ -- the ids are stable, from the TOGGLES list
   "no_enc_dupes", "instant_fish", "heal_battle", "turn_away_nurse",
   "auto_repel",
   "bulk_mart", "bulk_coins", "lights_on", "remember_move", "keep_money",
-  "auto_cut", "run_hold_b",
-  "auto_battler", "map_location", "sand_free",
+  "auto_cut", "run_hold_b", "map_location", "sand_free",
 }) do
   local help = ex.helpFor(spec)
   T.check(type(help) == "string" and #help > 0,
@@ -3265,308 +3282,6 @@ do
   T.eq(chosen, nil, "B cancels with nil")
 end
 
--- ------- BATTLE PALACE AUTO BATTLER
-
--- Gen 1 has no NATURE field.  The mod derives a stable representative
--- Battle Palace nature from the four Gen 1 DVs plus stat EXP, with the
--- Palace's exact probability tables applied after that mapping.
-T.eq(ex.palaceNature({ dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
-                       statExp = {} }),
-     "LONELY", "high Attack / low Defense maps to LONELY")
-T.eq(ex.palaceNature({ dvs = { attack = 0, defense = 0, speed = 0, special = 0 },
-                       statExp = { speed = 65535 } }),
-     "TIMID", "speed stat EXP participates in the mapping")
-T.eq(ex.palaceNature({ dvs = { attack = 0, defense = 0, speed = 0, special = 0 },
-                       statExp = {} }),
-     "HARDY", "an even build maps to a neutral Palace nature")
-
-T.eq(ex.palaceCategory("LONELY", false, 19), "attack",
-     "LONELY's high-HP roll can select Attack")
-T.eq(ex.palaceCategory("LONELY", false, 20), "defense",
-     "LONELY's high-HP roll crosses into Defense at 20")
-T.eq(ex.palaceCategory("LONELY", false, 45), "support",
-     "LONELY's high-HP roll selects Support after both thresholds")
-T.eq(ex.palaceCategory("LONELY", true, 83), "attack",
-     "LONELY's low-HP table has its own thresholds")
-T.eq(ex.palaceCategory("LONELY", true, 84), "defense",
-     "LONELY's low-HP table crosses into Defense at 84")
-
-T.eq(ex.palaceMoveGroup({ id = "FIX_TACKLE", power = 40 }), "attack",
-     "damaging moves are Attack moves")
-T.eq(ex.palaceMoveGroup({ id = "USER_OR_SELECTED", power = 0,
-                          target = "user_or_selected_user" }), "support",
-     "zero-power user-or-selected moves are Support in Palace rules")
-T.eq(ex.palaceMoveGroup({ id = "USER_OR_SELECTED", power = 40,
-                          target = "user_or_selected_user" }), "attack",
-     "powered user-or-selected moves are Attack in Palace rules")
-T.eq(ex.palaceMoveGroup({ id = "SWORDS_DANCE", power = 0,
-                         target = "user" }), "defense",
-     "self-targeting moves are Defense moves")
-T.eq(ex.palaceMoveGroup({ id = "SWORDS_DANCE", power = 0,
-                          effect = "ATTACK_UP2_EFFECT" }), "defense",
-     "the real Gen 1 data (no target field) still groups Swords Dance as Defense")
-T.eq(ex.palaceMoveGroup({ id = "RECOVER", power = 0,
-                          effect = "HEAL_EFFECT" }), "defense",
-     "recovery moves are Defense like Emerald's MOVE_TARGET_USER")
-T.eq(ex.palaceMoveGroup({ id = "HARDEN", power = 0,
-                          effect = "DEFENSE_UP1_EFFECT" }), "defense",
-     "stat-up effects are Defense")
-T.eq(ex.palaceMoveGroup({ id = "DOUBLE_TEAM", power = 0,
-                          effect = "EVASION_UP1_EFFECT" }), "defense",
-     "evasion stat-ups are Defense")
-T.eq(ex.palaceMoveGroup({ id = "TOXIC", power = 0,
-                          target = "selected" }), "support",
-     "non-damaging opponent-targeting moves are Support moves")
-T.eq(ex.palaceMoveGroup({ id = "TOXIC", power = 0,
-                          effect = "POISON_EFFECT" }), "support",
-     "the real data shape keeps foe-targeting status as Support")
-T.eq(ex.palaceMoveGroup({ id = "COUNTER", power = 0,
-                          target = "selected" }), "support",
-     "Counter remains Support like the Gen 3 Palace")
-T.eq(ex.palaceMoveGroup({ id = "SONICBOOM", power = 1,
-                          effect = "SPECIAL_DAMAGE_EFFECT" }), "attack",
-     "fixed-damage moves remain Attack moves")
-
-do
-  local aiBattle = {
-    data = {
-      moves = {
-        FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
-        FIX_EMBERISH = { id = "FIX_EMBERISH", power = 40, type = "FIRE" },
-      },
-      type_chart = {
-        matchups = {},
-        types = { NORMAL = { name = "NORMAL", category = "physical" },
-                  FIRE = { name = "FIRE", category = "special" } },
-      },
-    },
-    rng = function(a, b) return 1 end,
-    enemyAIMods = {},
-  }
-  local aiBattler = {
-    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
-            statExp = {}, hp = 100, stats = { hp = 100 } },
-    curMoves = { { id = "FIX_TACKLE", pp = 10 },
-                 { id = "FIX_EMBERISH", pp = 10 } },
-  }
-  local target = { mon = { status = nil }, curTypes = { "GRASS" } }
-  local picked = ex.palaceChooseMove(aiBattle, aiBattler, target,
-                                     { nature = "LONELY", categoryRoll = 0 })
-  T.eq(picked.id, "FIX_EMBERISH",
-       "a selected category is scored by the normal AI before tie-breaking")
-end
-
-do
-  local data = { moves = {
-    FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
-    SWORDS_DANCE = { id = "SWORDS_DANCE", power = 0, type = "NORMAL",
-                     target = "user", effect = "ATTACK_UP2_EFFECT" },
-  } }
-  local battle = { data = data, rng = function() return 0 end,
-                   ruleset = { enemyUnlimitedPP = true } }
-  local battler = {
-    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
-            statExp = {}, hp = 20, stats = { hp = 100 }, status = nil },
-    curMoves = { { id = "FIX_TACKLE", pp = 10 },
-                 { id = "SWORDS_DANCE", pp = 10 } },
-  }
-  local target = { mon = { status = nil }, curTypes = { "NORMAL" } }
-  T.eq(ex.palaceChooseMove(battle, battler, target,
-                           { nature = "LONELY", categoryRoll = 0,
-                             moveRoll = 1 }).id, "FIX_TACKLE",
-       "the auto battler chooses from the nature-selected category")
-  battler.mon.hp = 10
-  T.eq(ex.palaceChooseMove(battle, battler, target,
-                           { nature = "LONELY", categoryRoll = 0,
-                             moveRoll = 1 }).id, "FIX_TACKLE",
-       "low HP still chooses a usable move from the selected category")
-end
-
-do
-  -- the Defense category is reachable with real Gen 1 data (no target
-  -- field): the stat-up move groups by effect and a Defense roll picks it
-  -- instead of falling through to the empty-category fallback
-  local data = { moves = {
-    FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
-    SWORDS_DANCE = { id = "SWORDS_DANCE", power = 0, type = "NORMAL",
-                     effect = "ATTACK_UP2_EFFECT" },
-  } }
-  local battle = { data = data, rng = function() return 0 end,
-                   ruleset = { enemyUnlimitedPP = true } }
-  local battler = {
-    mon = { dvs = { attack = 0, defense = 15, speed = 0, special = 0 },
-            statExp = {}, hp = 100, stats = { hp = 100 }, status = nil },
-    curMoves = { { id = "FIX_TACKLE", pp = 10 },
-                 { id = "SWORDS_DANCE", pp = 10 } },
-  }
-  -- BOLD (defense-heavy, thresholds 30/50): roll 40 lands in Defense
-  local picked = ex.palaceChooseMove(battle, battler, nil,
-    { nature = "BOLD", categoryRoll = 40, moveRoll = 1 })
-  T.eq(picked.id, "SWORDS_DANCE",
-       "a Defense roll picks the stat-up move grouped by effect")
-end
-
-do
-  -- The live hook substitutes only the player's action; with the toggle OFF
-  -- the existing enemy-action chain remains the source of truth.
-  local vanilla = function() return { id = "FIX_SCRATCH", pp = 10 } end
-  bucket.auto_battler = false
-  local off = ex.autoBattleAction(nil, { id = "FIX_SCRATCH", pp = 10 })
-  T.eq(off.id, "FIX_SCRATCH", "AUTO BATTLER OFF delegates to vanilla")
-  bucket.auto_battler = true
-  local liveData = { moves = {
-    FIX_TACKLE = { id = "FIX_TACKLE", power = 40, type = "NORMAL" },
-  } }
-  local liveBattler = {
-    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
-            statExp = {}, hp = 100, stats = { hp = 100 } },
-    curMoves = { { id = "FIX_TACKLE", pp = 10 } },
-  }
-  local liveBattle = {
-    data = liveData, ruleset = { enemyUnlimitedPP = false }, rng = function(a, b)
-      return a == 0 and 0 or 1
-    end,
-    player = liveBattler, enemy = {},
-    fightLockedAction = function() return nil end,
-  }
-  local on = ex.autoBattleAction(liveBattle,
-                                 { id = "FIX_SCRATCH", pp = 10 })
-  T.eq(on.id, "FIX_TACKLE", "AUTO BATTLER ON supplies the player's action")
-  T.eq(ex.autoBattleAction(liveBattle, { id = "FIX_SCRATCH", pp = 10 }).id,
-       "FIX_TACKLE", "AUTO BATTLER uses the exported live seam")
-  T.eq(ex.autoBattleShouldAct({ phase = "menu", player = liveBattler,
-                                enemy = liveBattle.enemy }), true,
-       "AUTO BATTLER takes over a free battle menu turn")
-  T.eq(ex.autoBattleShouldAct({ phase = "moveSelect", player = liveBattler,
-                                enemy = liveBattle.enemy }), false,
-       "AUTO BATTLER does not take over the move-selection screen")
-  local vanillaUpdate = function() return "vanilla" end
-  local menuAction
-  local menuBattle = {
-    phase = "menu", _qolAutoBattleProbe = true, moveIndex = 1, data = liveData,
-    rng = function(a, b) return a == 0 and 0 or 1 end,
-    player = liveBattler, enemy = liveBattle.enemy,
-    menuLockedAction = function() return nil end,
-    fightLockedAction = function() return nil end,
-    resolveTurn = function(_, action) menuAction = action end,
-  }
-  T.eq(ex.autoBattleUpdate(menuBattle, vanillaUpdate, 0), true,
-       "the live menu seam consumes the update")
-  T.eq(menuAction.id, "FIX_TACKLE",
-       "the live menu seam submits the Palace action")
-  bucket.auto_battler = false
-  T.eq(ex.autoBattleUpdate(menuBattle, vanillaUpdate, 0), "vanilla",
-       "the live seam delegates when AUTO BATTLER is OFF")
-  T.eq(ex.autoBattleShouldAct({ phase = "menu", player = liveBattler,
-                                enemy = liveBattle.enemy }), false,
-       "AUTO BATTLER OFF leaves the battle menu alone")
-  bucket.auto_battler = false
-end
-
-do
-  local fallbackBattle = { data = { moves = {
-    FIX_TACKLE = { id = "FIX_TACKLE", power = 40 },
-    SWORDS_DANCE = { id = "SWORDS_DANCE", power = 0,
-                     effect = "ATTACK_UP2_EFFECT", target = "user" },
-  } }, rng = function(a, b) return a == 0 and 0 or 1 end }
-  local fallbackMon = {
-    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
-            statExp = {}, hp = 100, stats = { hp = 100 } },
-    curMoves = { { id = "FIX_TACKLE", pp = 10 } },
-  }
-  local picked = ex.palaceChooseMove(fallbackBattle, fallbackMon, nil,
-                                     { nature = "LONELY", categoryRoll = 99,
-                                       fallbackRoll = 1, fallbackChance = 0,
-                                       randomWithinCategory = true,
-                                       unlimited = false })
-  T.eq(picked.id, "FIX_TACKLE", "an empty Palace category falls back to a move")
-  local default = ex.palaceChooseMove(fallbackBattle, fallbackMon, nil,
-                                      { nature = "LONELY", categoryRoll = 99,
-                                        fallbackRoll = 1,
-                                        randomWithinCategory = true,
-                                        unlimited = false })
-  T.eq(default.id, "FIX_TACKLE",
-       "the QoL default falls back without the turn-wasting incapability roll")
-  local skipped = ex.palaceChooseMove(fallbackBattle, fallbackMon, nil,
-                                      { nature = "LONELY", categoryRoll = 99,
-                                        fallbackRoll = 1, fallbackChance = 50,
-                                        randomWithinCategory = true,
-                                        unlimited = false })
-  T.eq(skipped, nil,
-       "an explicit fallbackChance >= 50 re-enables Emerald's skip")
-  bucket.auto_battler = true
-  local queued = {}
-  local liveFallback = {
-    data = fallbackBattle.data,
-    player = fallbackMon,
-    enemy = { mon = { status = nil }, curTypes = { "NORMAL" } },
-    fightLockedAction = function() return nil end,
-    rng = function(a, b) return a == 0 and 99 or 1 end,
-    say = function(_, text) queued[#queued + 1] = text end,
-  }
-  fallbackMon.mon.hp = 100
-  fallbackMon._qolPalaceLowHp = nil
-  liveFallback.player.name = "FIXMON"
-  local wait = ex.autoBattleAction(liveFallback,
-                                    { id = "FIX_SCRATCH", pp = 10 })
-  T.eq(wait.id, "FIX_TACKLE",
-       "the live fallback uses a move instead of wasting the turn")
-  T.eq(#queued, 0, "no incapability text for the QoL fallback")
-  -- the incapability text is now unreachable from the live seam (a mon
-  -- with no usable moves gets the vanilla Struggle action instead); it
-  -- remains as the explicit-opt-in path (fallbackChance / fallbackIncapable)
-  -- that the pure suite pins
-  local emptyMon = {
-    mon = { dvs = { attack = 15, defense = 0, speed = 0, special = 0 },
-            statExp = {}, hp = 100, stats = { hp = 100 } },
-    curMoves = { { id = "FIX_SCRATCH", pp = 0 } },
-  }
-  local emptyBattle = {
-    data = fallbackBattle.data, player = emptyMon,
-    enemy = { mon = { status = nil }, curTypes = { "NORMAL" } },
-    fightLockedAction = function() return nil end,
-    rng = function(a, b) return a == 0 and 99 or 1 end,
-    say = function(_, text) queued[#queued + 1] = text end,
-  }
-  local none = ex.autoBattleAction(emptyBattle,
-                                   { id = "FIX_SCRATCH", pp = 10 })
-  T.eq(none.id, "STRUGGLE", "a mon with no usable moves gets Struggle")
-  T.eq(none.struggle, true, "the Struggle action carries the engine's flag")
-  T.eq(#queued, 0, "no incapability text on the Struggle path")
-  -- the pure chooser hands back the same action shape
-  local pure = ex.palaceChooseMove(emptyBattle, emptyMon, nil,
-                                   { nature = "LONELY", categoryRoll = 99,
-                                     randomWithinCategory = true,
-                                     unlimited = false })
-  T.eq(pure.id, "STRUGGLE", "palaceChooseMove returns the Struggle action")
-  bucket.auto_battler = false
-  T.eq(ex.autoBattleAction(liveFallback, { id = "FIX_SCRATCH", pp = 10 }).id,
-       "FIX_SCRATCH", "turning AUTO BATTLER off preserves the action")
-end
-
-do
-  -- The low-HP profile is latched until the battler is replaced, matching
-  -- Emerald's palaceFlags behavior rather than recomputing from current HP.
-  local latchBattle = { data = { moves = {
-    FIX_TACKLE = { id = "FIX_TACKLE", power = 40 },
-  } }, rng = function(a, b) return a == 0 and 0 or 1 end }
-  local latchMon = {
-    mon = { dvs = { attack = 0, defense = 0, speed = 0, special = 0 },
-            statExp = {}, hp = 40, stats = { hp = 100 } },
-    curMoves = { { id = "FIX_TACKLE", pp = 10 } },
-  }
-  ex.palaceChooseMove(latchBattle, latchMon, nil,
-                      { nature = "LONELY", categoryRoll = 0,
-                        randomWithinCategory = true, unlimited = false })
-  T.eq(latchMon._qolPalaceLowHp, true, "low HP sets the Palace style latch")
-  latchMon.mon.hp = 100
-  ex.palaceChooseMove(latchBattle, latchMon, nil,
-                      { nature = "LONELY", categoryRoll = 0,
-                        randomWithinCategory = true, unlimited = false })
-  T.eq(latchMon._qolPalaceLowHp, true,
-       "healing does not clear the Palace style latch")
-end
-
 -- ------- SAND FREE (battle.enemy_action choke point)
 
 bucket.sand_free = true
@@ -4028,6 +3743,35 @@ do
   T.eq(cryBattle.waitingSound, nil, "waitingSound cleared")
   T.eq(cryBattle.waitFrames, 0, "waitFrames zeroed")
 
+  -- Gen 2's text-command jingles store the sound NAME in waitSfx, and the
+  -- native BattleState update returns before reading A while that sound is
+  -- active. Anim Skip must stop the tracked source and clear this gate.
+  local gen2JingleStopped = false
+  local gen2Jingle = {
+    stop = function() gen2JingleStopped = true end,
+  }
+  local gen2JingleBattle = {
+    game = {
+      input = {
+        wasPressed = function(_, k) return k == "a" end,
+      },
+    },
+    phase = "resolving",
+    waitSfx = "Sfx_DexFanfare5079",
+    messageTimer = 48,
+    messageDelay = 40,
+  }
+  ex.setActiveSound(gen2Jingle)
+  skipped = ex.skipAnimOrAudio(gen2JingleBattle)
+  T.eq(skipped, true, "Gen 2 waitSfx jingle skips on A press")
+  T.eq(gen2JingleStopped, true, "Gen 2 waitSfx source is force-stopped")
+  T.eq(gen2JingleBattle.waitSfx, nil,
+       "Gen 2 waitSfx gate is cleared so UI can progress")
+  T.eq(gen2JingleBattle.messageTimer, 0,
+       "Gen 2 waitSfx message timer is cleared")
+  T.eq(gen2JingleBattle.messageDelay, 0,
+       "Gen 2 waitSfx message delay is cleared")
+
   -- 5. Battle message text and prompts fast-forward / advance on A-press
   local lineBegun = false
   local msgBattle = {
@@ -4088,6 +3832,81 @@ do
   T.eq(idleBattle.animPlaying, true, "animPlaying untouched without A press")
   T.eq(ex.skipAnimOrAudio(nil), false, "nil battle rejected")
   T.eq(ex.skipTextBox(nil), false, "nil textbox rejected")
+end
+
+-- =========================================================================
+-- Gen 2 / Crystal Detection and LIGHTS ON Tests
+-- =========================================================================
+do
+  T.eq(ex.isGen2Version("crystal"), true, "crystal recognized as Gen 2")
+  T.eq(ex.isGen2Version("Crystal"), true, "Crystal (case-insensitive) recognized as Gen 2")
+  T.eq(ex.isGen2Version("gold"), true, "gold recognized as Gen 2")
+  T.eq(ex.isGen2Version("silver"), true, "silver recognized as Gen 2")
+  T.eq(ex.isGen2Version("red"), false, "red is not Gen 2")
+  T.eq(ex.isGen2Version("blue"), false, "blue is not Gen 2")
+  T.eq(ex.isGen2Version("yellow"), false, "yellow is not Gen 2")
+
+  -- detectGen2 with Crystal mod.game
+  local crystalMod = { game = { version = "crystal", generation = 2 } }
+  T.eq(ex.detectGen2(crystalMod), true, "detectGen2 returns true for Crystal mod.game")
+
+  -- detectGen2 with Crystal data
+  local crystalDataMod = { game = { data = { gen2Maps = {} } } }
+  T.eq(ex.detectGen2(crystalDataMod), true, "detectGen2 returns true for Gen 2 data tables")
+
+  -- Live toggle palette refresh
+  local palettesApplied = false
+  local mapImagesRefreshed = false
+  local fakeWorld = {
+    applyPalettes = function() palettesApplied = true end,
+    refreshMapImages = function() mapImagesRefreshed = true end,
+  }
+  local prevWorld = Game.world
+  Game.world = fakeWorld
+  ex.set("lights_on", true)
+  T.eq(palettesApplied, true, "setting lights_on applies palettes immediately on active world")
+  T.eq(mapImagesRefreshed, true, "setting lights_on refreshes map images immediately on active world")
+  Game.world = prevWorld
+
+  -- Badgeless HMs label and help checks
+  local gen1Rows = ex.toggleRows(ex.get, ex.set, false)
+  local gen2Rows = ex.toggleRows(ex.get, ex.set, true)
+  local badgelessG1, badgelessG2, modernTypesRow, expBarRow
+  for _, r in ipairs(gen1Rows) do
+    if r.id == "badgeless_moves" then badgelessG1 = r end
+    if r.id == "modern_types" then modernTypesRow = r end
+    if r.id == "exp_bar" then expBarRow = r end
+  end
+  for _, r in ipairs(gen2Rows) do
+    if r.id == "badgeless_moves" then badgelessG2 = r end
+  end
+  T.neq(badgelessG1, nil, "badgeless HMs exists on Gen 1")
+  T.eq(badgelessG1.label, "BADGELESS HMs", "badgeless HMs label is BADGELESS HMs on Gen 1")
+  T.neq(badgelessG2, nil, "badgeless HMs exists on Gen 2")
+  T.eq(badgelessG2.label, "BADGELESS HMs", "badgeless HMs label is BADGELESS HMs on Gen 2")
+  T.check(tostring(badgelessG1.help):find("FLASH"), "Gen 1 badgeless help includes FLASH")
+  T.check(tostring(badgelessG2.help):find("WATERFALL") and tostring(badgelessG2.help):find("WHIRLPOOL"), "Gen 2 badgeless help includes WATERFALL and WHIRLPOOL")
+
+  -- Modern Types and Exp Bar help texts exist
+  T.neq(modernTypesRow, nil, "modern_types toggle exists")
+  T.neq(modernTypesRow.help, nil, "modern_types has START info text")
+  T.neq(expBarRow, nil, "exp_bar toggle exists")
+  T.neq(expBarRow.help, nil, "exp_bar has START info text")
+
+  -- Gen 2 Unlimited TMs consumption check
+  local Game2 = require("src.core.Game2")
+  local g2 = setmetatable({
+    save = { inventory = { TM01 = 1, TM_DYNAMICPUNCH = 2, POTION = 3 } },
+    data = { items = { TM01 = { teaches = "DYNAMICPUNCH", pocket = "TM_HM" } } },
+  }, { __index = Game2 })
+  ex.set("unlimited_tms", true)
+  g2:consumeItem("TM01")
+  T.eq(g2.save.inventory.TM01, 1, "unlimited_tms preserves TM01 in Gen 2")
+  g2:consumeItem("TM_DYNAMICPUNCH")
+  T.eq(g2.save.inventory.TM_DYNAMICPUNCH, 2, "unlimited_tms preserves TM_DYNAMICPUNCH in Gen 2")
+  g2:consumeItem("POTION")
+  T.eq(g2.save.inventory.POTION, 2, "unlimited_tms consumes non-TM items like POTION in Gen 2")
+  Game.save = prevGameSave
 end
 
 run.release()

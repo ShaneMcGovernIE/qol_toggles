@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.30.7] - 2026-08-27
+
+### Fixed & Improved
+
+- **Fixed Poison Crash on iOS & Android (Gen 2)**: Fixed an overworld crash when taking poison damage while walking in Gold, Silver, and Crystal.
+- **Zero-Delay Menu Toggles**: Eliminated delay and frame stutter when turning toggles on or off in the Options menu by optimizing storage saves.
+- **Infinite TMs in Gen 2**: Fixed Unlimited TMs so TMs are never consumed when teaching moves in Gold, Silver, and Crystal.
+- **Heal After Battle in Gen 2**: Fixed Heal After Battle to properly restore party HP, status, and PP in Gen 2 battles.
+- **Badgeless HMs**: Renamed toggle to *BADGELESS HMs* and updated the START info text to show all Gen 2 HMs (including Waterfall and Whirlpool) when playing Gold, Silver, or Crystal.
+- **START Info Texts**: Added START button help popups for *EXP BAR* and *MODERN TYPES*.
+
+## [1.30.6] - 2026-08-26
+
+### Fixed
+
+- **LIGHTS ON in Crystal**: Fixed Gen 2 engine lineage and version detection for Crystal so the `map.palette` hook and dark cave palette overrides install properly during Crystal's boot.
+- **Immediate Palette Refresh**: Toggling `LIGHTS ON` in the Options menu while currently inside a cave or dark area immediately re-bakes and applies the overworld map palettes without needing to re-enter the map.
+
+## [1.30.5] - 2026-08-26
+
+### Changed
+
+- AUTO BATTLER moved into the standalone Auto Battler mod. Existing
+  `qol_toggles.auto_battler` settings migrate to the new mod's option bucket
+  when no explicit `auto_battler.enabled` value exists.
+
 ## [1.30.4] - 2026-08-26
 
 ### Fixed

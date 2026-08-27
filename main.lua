@@ -356,10 +356,9 @@ local TOAST_SECONDS = 2.5
 -- session-scoped mirror of lastEncounterSpecies.
 local lastMapId = nil
 
--- INFINITE HELD ITEM (Gen 2): each active battle gets a weakly-held snapshot
--- of the player's party items. The snapshot is separate from the live mons,
--- so a Berry can be consumed normally and is restored only at battle end.
-local infiniteHeldItemBattles = setmetatable({}, { __mode = "k" })
+-- INFINITE HELD ITEM (Gen 2): snapshot of Pokémon held items to restore
+-- after battle finishes or upon blackout/save. Keyed by mon object reference.
+local pendingHeldItemRestores = {}
 
 -- the selectable multipliers shared by the EXP MULT and MONEY MULT rows:
 -- false = OFF (vanilla), then 0x, 1.5x, 2x, 3x, 4x.  A stored `true` is a
@@ -985,17 +984,45 @@ return function(mod)
   local function snapshotHeldItems(party)
     local snapshot = {}
     for index, mon in ipairs(party or {}) do
-      if mon and mon.item ~= nil then snapshot[index] = mon.item end
+      if mon and mon.item ~= nil and mon.item ~= false then
+        snapshot[mon] = mon.item
+        snapshot[index] = mon.item
+        pendingHeldItemRestores[mon] = mon.item
+      end
     end
     return snapshot
   end
+  mod.exports.snapshotHeldItems = snapshotHeldItems
 
   local function restoreHeldItems(party, snapshot)
-    for index, item in pairs(snapshot or {}) do
-      local mon = party and party[index]
-      if mon then mon.item = item end
+    if snapshot then
+      for key, item in pairs(snapshot) do
+        if type(key) == "table" and (key.item == nil or key.item == false) then
+          key.item = item
+        end
+      end
+      for index, mon in ipairs(party or {}) do
+        if mon and (mon.item == nil or mon.item == false) and snapshot[index] ~= nil then
+          mon.item = snapshot[index]
+        end
+      end
     end
   end
+  mod.exports.restoreHeldItems = restoreHeldItems
+
+  local function restoreAllPendingHeldItems()
+    if not get("infinite_held_item") then
+      pendingHeldItemRestores = {}
+      return
+    end
+    for mon, item in pairs(pendingHeldItemRestores) do
+      if mon and item and (mon.item == nil or mon.item == false) then
+        mon.item = item
+      end
+    end
+    pendingHeldItemRestores = {}
+  end
+  mod.exports.restoreAllPendingHeldItems = restoreAllPendingHeldItems
 
   -- the wallet on either generation: Gen 1's save.money, Gold's
   -- save.player.money (src/core/gen2/Save.lua:147)
@@ -4407,33 +4434,36 @@ return function(mod)
 
   -- INFINITE HELD ITEM (Gen 2): snapshot the player's party before battle
   -- logic can consume a Berry or status-curing held item. Restore only after
-  -- battle.ended, never after a turn, so each item still works once per
+  -- battle ends, never mid-battle, so each item still works once per
   -- battle. Opposing trainer and wild Pokémon are intentionally untouched.
   mod.events:on("battle.started", function(ev)
-    if not GEN2 or not get("infinite_held_item") then return end
+    if not get("infinite_held_item") then return end
     local battle = ev and ev.battle
     local party = battleParty(battle)
-    if battle and party then
-      infiniteHeldItemBattles[battle] = {
-        party = party,
-        items = snapshotHeldItems(party),
-      }
+    if party then
+      snapshotHeldItems(party)
     end
   end)
 
+  -- Also capture when any held item triggers/activates during battle
+  mod.hooks:wrap("held_item.trigger", function(next, ctx)
+    if get("infinite_held_item") and ctx and ctx.mon and ctx.mon.item then
+      pendingHeldItemRestores[ctx.mon] = ctx.mon.item
+    end
+    return next(ctx)
+  end)
+
   mod.events:on("battle.ended", function(ev)
-    local battle = ev and ev.battle
-    local saved = battle and infiniteHeldItemBattles[battle]
-    if not saved then return end
-    infiniteHeldItemBattles[battle] = nil
     if get("infinite_held_item") then
-      restoreHeldItems(saved.party, saved.items)
+      local battle = ev and ev.battle
+      local party = battleParty(battle)
+      if party then snapshotHeldItems(party) end
+      restoreAllPendingHeldItems()
     end
   end)
 
   -- HEAL AFTER BATTLE: every battle that ends (win, run, catch, loss)
-  -- fully heals the party -- HP, status, and all PP.  Gen 2's Battle has no
-  -- `.game` field, so the save comes from Game.save (the same fallback).
+  -- fully heals the party -- HP, status, and all PP.
   mod.events:on("battle.ended", function(ev)
     if ev and ev.battle and get("heal_battle") then
       local party = battleParty(ev.battle)
@@ -4441,16 +4471,26 @@ return function(mod)
     end
   end)
 
-  -- KEEP MONEY: the blackout halving already ran before this event fires;
-  -- restore the pre-blackout snapshot taken by the wraps below
+  -- KEEP MONEY & HELD ITEM RESTORE on blackout:
   mod.events:on("world.blacked_out", function(ev)
     if ev and ev.save then mod.exports.keepMoneyRestore(ev.save) end
+    restoreAllPendingHeldItems()
   end)
 
-  -- Ensure any pending debounced settings are written before save or quit
+  -- Ensure any pending debounced settings and held items are restored before save, quit or map transition
+  mod.events:on("save.saving", function()
+    restoreAllPendingHeldItems()
+    flushSettings()
+  end)
   mod.events:on("save.saved", function() flushSettings() end)
   mod.events:on("save.created", function() flushSettings() end)
-  mod.events:on("game.quitting", function() flushSettings() end)
+  mod.events:on("game.quitting", function()
+    restoreAllPendingHeldItems()
+    flushSettings()
+  end)
+  mod.events:on("map.entered", function()
+    restoreAllPendingHeldItems()
+  end)
 
   -- -------------------------------------------------- MAP LOCATION
 

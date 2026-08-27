@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.30.8] - 2026-08-28
+
+### Fixed
+
+- **Fixed Disappearing Held Items (Gen 2)**: Rebuilt the Infinite Held Items system to reliably restore all consumed Berries and battle items when a battle ends. Restores items across party reordering, mid-battle switches, team wipes/blackouts, and direct game saves.
+
 ## [1.30.7] - 2026-08-27
 
 ### Fixed & Improved

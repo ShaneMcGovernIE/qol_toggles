@@ -152,20 +152,34 @@ do
     "gen 2 enabled count matches the shown rows")
 
   -- INFINITE HELD ITEM: the player's held item remains consumed during the
-  -- battle and is restored only when the battle.ended event fires.
+  -- battle and is restored only when the battle ends (or blackout/save).
   run2.loader.modOptions = run2.loader.modOptions or {}
   local goldOptions = run2.loader.modOptions.qol_toggles or {}
   run2.loader.modOptions.qol_toggles = goldOptions
   goldOptions.infinite_held_item = true
-  local heldMon = { item = "BERRY" }
-  local heldBattle = { party = { heldMon } }
+  local heldMon1 = { name = "Pikachu", item = "GOLD_BERRY" }
+  local heldMon2 = { name = "Cyndaquil", item = "BITTER_BERRY" }
+  local heldBattle = { party = { heldMon1, heldMon2 } }
   Runtime.emit("battle.started", { battle = heldBattle })
-  heldMon.item = nil
-  T.eq(heldMon.item, nil,
+  heldMon1.item = nil
+  T.eq(heldMon1.item, nil,
     "INFINITE HELD ITEM does not refill a consumed item mid-battle")
+  -- Party reordering during battle: slot 2 swapped with slot 1
+  heldBattle.party[1], heldBattle.party[2] = heldMon2, heldMon1
+  heldMon2.item = nil
   Runtime.emit("battle.ended", { battle = heldBattle, result = "win" })
-  T.eq(heldMon.item, "BERRY",
-    "INFINITE HELD ITEM restores the item after battle")
+  T.eq(heldMon1.item, "GOLD_BERRY",
+    "INFINITE HELD ITEM restores item to correct mon even after party reorder")
+  T.eq(heldMon2.item, "BITTER_BERRY",
+    "INFINITE HELD ITEM restores multiple consumed items across party")
+
+  -- Blackout / wipeout restoration
+  local wipeMon = { name = "Totodile", item = "MYSTERYBERRY" }
+  Runtime.emit("battle.started", { battle = { party = { wipeMon } } })
+  wipeMon.item = nil
+  Runtime.emit("world.blacked_out", { save = {} })
+  T.eq(wipeMon.item, "MYSTERYBERRY",
+    "INFINITE HELD ITEM restores items on blackout")
   goldOptions.infinite_held_item = false
 
   local goldWallet = { player = { money = 20000, coins = 0 } }

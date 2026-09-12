@@ -34,7 +34,9 @@ love .
   exactly like a full moveset on the cart.
 - **BADGELESS HMs** — the badge gates come off: FLY, SURF, CUT,
   STRENGTH and FLASH (plus WATERFALL and WHIRLPOOL on Gen 2) work without
-  their badges.  Pairs with FIELD MOVES ALL for a no-badge, no-moveset run.
+  their badges.  FLY also lists every native city/fly point even before you
+  have visited it, while the engine keeps its normal region and landing rules.
+  Pairs with FIELD MOVES ALL for a no-badge, no-moveset run.
 - **HM ITEM REQUIRED** — the FIELD MOVES ALL extras for HM moves only
   appear once you actually hold the HM item: no CUT on the Cascade Badge
   alone when the CUT HM is still on the S.S. Anne.  (Moves a Pokémon
@@ -98,8 +100,10 @@ love .
   Oak and any found on the ground never do.  The counter carries across
   shops and save sessions on both generations; the toggle ships OFF.
 - **NO ENCOUNTER DUPES** — a wild roll never gives the same species
-  twice in a row: the roll is re-rolled until it differs (best effort —
-  an area with a single species still yields it).  Session-scoped.
+  twice in a row, whether you walked into it or fished it up: the roll is
+  re-rolled until it differs (best effort — an area with a single species
+  still yields it, and after 8 tries the last roll stands).  Walking and
+  fishing share one remembered species.  Session-scoped.
 - **INSTANT FISH** — the rod always bites on the first try: the
   candidate group is picked uniformly instead of running the engine's
   rejection loop (bite odds size/(size+4)).  A map with no fishing
@@ -111,6 +115,15 @@ love .
   item in battle, its original held item returns after the battle. It stays
   consumed for the rest of that battle, so a BERRY can heal once per battle.
   Ships OFF.
+- **INSTANT HATCH** — Gen 2 only.  Any egg in your party hatches on your very
+  next step, whether it just arrived from the Day-Care or has been carried for
+  a while.  The engine only ticks an egg's counter on one phase of its
+  256-step cycle, so a spent egg could still sit in the party for most of a
+  cycle; with the toggle ON the first footfall zeroes the party's first egg
+  and the hatch runs through the engine's own hatch script, so the animation,
+  "* came out of its EGG!" and the nickname prompt are all vanilla.  A party
+  of several eggs hatches one per step, the cart's own one-hatch-per-footfall
+  rule.  Ships OFF.
 - **TURN AWAY (NURSE)** — after a Pokécenter nurse heals you, you turn
   away from the counter, so an A-mash walks you off instead of locking
   you back into her dialogue.  The Elm's-lab and Hall-of-Fame heal

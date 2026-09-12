@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.31.0] - 2026-09-12
+
+### Added
+
+- **INSTANT HATCH (Gen 2)**: A new toggle that hatches any egg in the party on
+  your next step.  The engine ticks an egg's counter only on one phase of the
+  256-step cycle, so even an egg whose cycles are spent could wait most of a
+  further cycle; with the toggle ON the first footfall zeroes the party's first
+  egg and the vanilla hatch script runs as usual -- animation, "* came out of
+  its EGG!" and the nickname prompt are untouched.  A party of several eggs
+  hatches one per step, matching the cart's one-hatch-per-footfall rule.
+  Ships OFF.
+- **BADGELESS HMs: every FLY destination**: With BADGELESS HMs on, FLY now
+  lists every native city/fly point even before you have visited it, on
+  Red/Blue/Yellow and Gold alike.  The engine keeps its own region and landing
+  rules, and the real save is never marked up to do it -- the visited set is
+  cloned just for the list.
+
+### Changed
+
+- **QUICK NURSE on Gold**: The nurse is now found by her sprite, script key or
+  object name instead of one hard-coded script key, so the no-dialogue heal
+  works at Gold's Pokecenters.  The heal also restores Gold party members
+  properly -- HP, status and PP, which the Gen 1 heal path never did for mons
+  with no stat block -- and the nurse turns to face the heal machine during the
+  animation and back to you when it finishes.
+
+### Fixed
+
+- **NO ENCOUNTER DUPES now covers fishing**: A bite that repeats the previous
+  species is re-rolled like a walking encounter (best effort, at most 8 tries)
+  instead of fishing sailing past the toggle.  Walking and fishing share the
+  one remembered species.
+- **EXP BAR growth curves on Gen 2 data**: Growth-rate ids such as
+  `MEDIUM_FAST` are normalised before the curve lookup, so Gold's uppercase ids
+  resolve to the correct EXP curve instead of the generic formula.
+- **A missing optional engine module no longer takes the mod down**: The shop,
+  list, bag, quantity-box, overworld and Gen 2 seams now load defensively, and
+  the generation is re-resolved when the game is ready, so a module a build
+  does not ship (or a generation that is only known at boot) no longer costs
+  you the whole toggle set.
+
 ## [1.30.8] - 2026-08-28
 
 ### Fixed

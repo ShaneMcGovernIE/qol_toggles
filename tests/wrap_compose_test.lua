@@ -15,7 +15,16 @@ package.path = "./?.lua;./?/init.lua;" .. package.path
 
 local T = require("tests.modkit")
 
-local run = T.sdk.loadMods({ "mods/qol_toggles", "mods/mods_hotkeys" })
+local loadRoot = arg and arg[1]
+local qolPath = loadRoot and "." or "mods/qol_toggles"
+local hotkeysPath = "mods/mods_hotkeys"
+local f = io.open(hotkeysPath .. "/manifest.json", "r")
+if f then
+  f:close()
+else
+  hotkeysPath = "/Users/shanemcgovern/Downloads/Gen1Recomp-SBC/gen1recomp/lovegame/mods/mods_hotkeys"
+end
+local run = T.sdk.loadMods({ qolPath, hotkeysPath }, { root = loadRoot })
 T.eq(#run.errors, 0, "both ticker mods load together")
 
 local ex = run.loader.exports.qol_toggles

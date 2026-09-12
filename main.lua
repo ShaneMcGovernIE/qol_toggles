@@ -10,7 +10,8 @@
 --                    TM/HM) gets the out-of-battle option without
 --                    knowing it
 --   BADGELESS MOVES  FLY/SURF/CUT/STRENGTH/FLASH work without their
---                    badges (the list and the usage-time gates both)
+--                    badges; FLY can reach any native city/fly point
+--                    even before it has been visited
 --   HM ITEM REQUIRED the FIELD MOVES ALL phantom slots for HM moves only
 --                    appear once the player holds the HM item
 --                    (no CUT on the Cascade Badge alone -- the HM is on
@@ -40,6 +41,8 @@
 --   HEAL AFTER BATTLE   every battle ends with the party fully healed
 --   INFINITE HELD ITEM Gen 2 party held items return after battle (never
 --                    during the battle)
+--   INSTANT HATCH    Gen 2: any egg in the party hatches on the very next
+--                    step (one per footfall, first egg first)
 --   AUTO-REPEL          a worn-off repel is replaced from the bag (best
 --                       one first)
 --   TURN AWAY (NURSE)  after the nurse heals you, you turn away from the
@@ -128,6 +131,9 @@ local function detectGen2(mod)
       return true
     end
   end
+  if mod and (mod.generation == 2 or (mod.loader and mod.loader.generation == 2)) then
+    return true
+  end
   if GameVersion then
     local ver = nil
     if type(GameVersion.get) == "function" then
@@ -163,11 +169,6 @@ local function detectGen2(mod)
   if Game and (Game.isGame2 or Game.generation == 2 or isGen2Version(Game.version) or isGen2Version(Game.id)) then
     return true
   end
-  if package and package.loaded then
-    if package.loaded["src.core.Game2"] or package.loaded["src.world.gen2.World"] then
-      return true
-    end
-  end
   return false
 end
 
@@ -189,11 +190,11 @@ local function scrollOffset(t, overflow, hold, speed)
   local p = t % cycle
   if p < hold then return 0 end
   p = p - hold
-  if p < scroll then return -p * speed end
+  if p < scroll then return math.floor(-p * speed + 0.5) end
   p = p - scroll
   if p < hold then return -overflow end
   p = p - hold
-  return -overflow + p * speed
+  return math.floor(-overflow + p * speed + 0.5)
 end
 
 local function tickerOffset(t, overflow)
@@ -400,8 +401,8 @@ local TOGGLES = {
   { key = "field_moves_all", label = "FIELD MOVES ALL", default = true,
     help = "A mon that can\nlearn a field\nmove can use it\nwithout knowing\nit.\vBadge gates and\ncontext rules." },
   { key = "badgeless_moves", label = "BADGELESS HMs", default = false,
-    help = "FLY, SURF, CUT,\nSTRENGTH and\nFLASH work\nwithout their\nbadges.",
-    gen2Help = "CUT, FLY, SURF,\nSTRENGTH, FLASH,\nWATERFALL and\nWHIRLPOOL work\nwithout badges." },
+    help = "FLY can reach\nany city, even\nbefore visiting;\nSURF, CUT,\nSTRENGTH and\nFLASH work\nwithout badges.",
+    gen2Help = "FLY reaches\nany city/fly point,\neven before\nvisiting; CUT,\nSURF, STRENGTH,\nFLASH, WATERFALL,\nWHIRLPOOL work\nwithout badges." },
   { key = "hm_item_required", label = "HM ITEM REQUIRED", default = true,
     help = "HM slots only\nappear once you\nhold the HM item.\vMoves a mon\nalready knows are\nnever gated." },
   { key = "unlimited_tms", label = "UNLIMITED TMs", default = true,
@@ -445,6 +446,9 @@ local TOGGLES = {
   { key = "infinite_held_item", label = "INFINITE HELD ITEM",
     default = false, gen2 = true,
     help = "Used held items\nreturn after\nbattle.\vThey stay\nconsumed until\nthe battle ends." },
+  { key = "instant_hatch", label = "INSTANT HATCH",
+    default = false, gen2 = true,
+    help = "Any egg hatches\non your next\nstep.\vEggs in the\nparty and eggs\nyou collect\nboth count." },
   { key = "turn_away_nurse", label = "TURN AWAY (NURSE)", default = false,
     help = "After the nurse\nheals you, you\nturn away from\nthe counter, so\nA walks off\ninstead of\ntalking again." },
   { key = "quick_nurse", label = "QUICK NURSE", default = false,
@@ -669,6 +673,96 @@ return function(mod)
     value = bucket and bucket[key]
     if value ~= nil then return value end
     return mod.exports.defaultFor(key)
+  end
+
+  -- BADGELESS FLY: the engine keeps the destination list separate from the
+  -- badge/field-move eligibility gate.  Give the native picker a temporary
+  -- view in which every native fly point has been visited, then let the
+  -- engine keep its own region, map, warp and landmark filters.  The copies
+  -- are deliberately shallow: only the nested visited tables are replaced,
+  -- so the real save is never changed just by opening FLY.
+  local function copyTable(value)
+    if type(value) ~= "table" then return value end
+    local copy = {}
+    for key, item in pairs(value) do copy[key] = item end
+    local mt = getmetatable(value)
+    if mt then setmetatable(copy, mt) end
+    return copy
+  end
+
+  local function gen1FlyGame(game)
+    if type(game) ~= "table" then return game end
+    local cloned = copyTable(game)
+    local save = copyTable(game.save) or {}
+    local visited = copyTable(game.save and game.save.visited) or {}
+    local field = game.data and game.data.field or {}
+    for _, mapId in ipairs(field.flyOrder or {}) do
+      visited[mapId] = true
+    end
+    save.visited = visited
+    cloned.save = save
+    return cloned
+  end
+
+  local function gen2FlySave(save, flyPoints)
+    if type(save) ~= "table" then return save end
+    local cloned = copyTable(save)
+    local visited = copyTable(save.visitedSpawns) or {}
+    local flags = copyTable(save.engineFlags) or {}
+    for _, row in ipairs(flyPoints or {}) do
+      if row.spawn then visited[row.spawn] = true end
+      if row.flag ~= nil then flags[row.flag] = true end
+    end
+    cloned.visitedSpawns = visited
+    cloned.engineFlags = flags
+    return cloned
+  end
+
+  local function installBadgelessFly()
+    if GEN2 then
+      local ok, FieldMoves2 = pcall(require, "src.world.gen2.FieldMoves")
+      if not (ok and FieldMoves2)
+         or FieldMoves2._qolTogglesBadgelessFlyInstalled then
+        return
+      end
+      local vanillaFlyPoints = FieldMoves2.flyPoints
+      if type(vanillaFlyPoints) ~= "function" then return end
+      FieldMoves2._qolTogglesBadgelessFlyInstalled = true
+      FieldMoves2.flyPoints = function(save, landmarks, region)
+        if not get("badgeless_moves") then
+          return vanillaFlyPoints(save, landmarks, region)
+        end
+        return vanillaFlyPoints(
+          gen2FlySave(save, FieldMoves2.FLYPOINTS), landmarks, region)
+      end
+      return
+    end
+
+    local okTownMap, TownMap = pcall(require, "src.ui.TownMap")
+    if okTownMap and TownMap and not TownMap._qolTogglesBadgelessFlyInstalled then
+      local vanillaNew = TownMap.new
+      if type(vanillaNew) == "function" then
+        TownMap._qolTogglesBadgelessFlyInstalled = true
+        TownMap.new = function(game, opts)
+          if get("badgeless_moves") and opts and opts.fly then
+            game = gen1FlyGame(game)
+          end
+          return vanillaNew(game, opts)
+        end
+      end
+    end
+
+    local okFlyMenu, FlyMenu = pcall(require, "src.ui.FlyMenu")
+    if okFlyMenu and FlyMenu and not FlyMenu._qolTogglesBadgelessFlyInstalled then
+      local vanillaNew = FlyMenu.new
+      if type(vanillaNew) == "function" then
+        FlyMenu._qolTogglesBadgelessFlyInstalled = true
+        FlyMenu.new = function(game)
+          if get("badgeless_moves") then game = gen1FlyGame(game) end
+          return vanillaNew(game)
+        end
+      end
+    end
   end
 
   -- MODERN TYPES: the Gen VI+ type chart (minus FAIRY) replaces the cart's
@@ -1708,18 +1802,24 @@ return function(mod)
   mod.exports.EXP_BAR_X = EXP_BAR_X
   mod.exports.EXP_BAR_RIGHT = EXP_BAR_RIGHT
   mod.exports.EXP_BAR_WIDTH = EXP_BAR_WIDTH
+  mod.exports.EXP_BAR_Y = EXP_BAR_Y
   mod.exports.EXP_BAR_HEIGHT = EXP_BAR_HEIGHT
 
   -- Minimum total EXP required to reach a given level for a growth rate.
   -- Delegates to src.pokemon.Growth when available, falling back to the standard
   -- Gen 1 formula table.
   mod.exports.expForLevel = function(growthRate, level, growthRatesData)
+    local rateStr = tostring(growthRate or "")
+    local normRate = rateStr:upper():gsub("%s+", "_")
     local ok, Growth = pcall(require, "src.pokemon.Growth")
     if ok and Growth and type(Growth.expForLevel) == "function" then
+      if Growth.CURVES and (Growth.CURVES[normRate] or (growthRatesData and growthRatesData[normRate])) then
+        return Growth.expForLevel(normRate, level, growthRatesData)
+      end
       return Growth.expForLevel(growthRate, level, growthRatesData)
     end
     local n = math.max(1, math.min(100, tonumber(level) or 1))
-    local rate = tostring(growthRate or ""):lower()
+    local rate = rateStr:lower()
     if rate == "fast" or (rate:find("fast") and not rate:find("medium")) then
       return math.floor(4 * n * n * n / 5)
     elseif rate == "slow" or (rate:find("slow") and not rate:find("medium")) then
@@ -1991,9 +2091,28 @@ return function(mod)
       return true
     end
     save.usedPokecenter = true -- BIT_USED_POKECENTER, like the vanilla flow
-    local Pokemon = require("src.pokemon.Pokemon")
     for _, mon in ipairs(save.party or {}) do
-      if mon then Pokemon.heal(mon) end
+      if mon then
+        -- Gen 1 mons carry a `stats` table and heal through the engine's own
+        -- Pokemon.heal; Gold's mons have none, so their HP, status and PP are
+        -- restored here instead.  The Gen 1 module is required lazily and
+        -- defensively: a Gen 2-only engine that does not ship it still heals
+        -- through the fallback rather than aborting the whole nurse.
+        local okPokemon, Pokemon = false, nil
+        if mon.stats then
+          okPokemon, Pokemon = pcall(require, "src.pokemon.Pokemon")
+        end
+        if okPokemon and Pokemon and Pokemon.heal then
+          Pokemon.heal(mon)
+        else
+          mon.hp = mon.maxHp or mon.hp
+          mon.status = nil
+          mon.statusTurns = nil
+          for _, move in ipairs(mon.moves or {}) do
+            if type(move) == "table" then move.pp = move.maxPp or move.pp end
+          end
+        end
+      end
     end
     save.lastHeal = { -- SetLastBlackoutMap, exactly the vanilla record
       map = self.map.id, x = self.player.cellX, y = self.player.cellY,
@@ -2066,33 +2185,38 @@ return function(mod)
   -- geometry helpers directly; the live Gen 2 world falls back to its native
   -- modules below.
   mod.exports.nurseAt = function(world)
-    if not (world and world.player and world.vm and world.npcAt
-            and world.map) then
+    if not (world and world.player and world.npcAt and world.map) then
       return nil
     end
-    if world:busy() then return nil end
+    if world.busy and world:busy() then return nil end
     local p = world.player
     if p.moving then return nil end
-    local delta = world.delta
-    if not delta then
-      delta = require("src.world.gen2.Map").DELTA
+    local ox, oy
+    if type(world.facingObjectCell) == "function" then
+      ox, oy = world:facingObjectCell()
+    else
+      local delta = world.delta or (require("src.world.gen2.Map").DELTA)
+      local isCounter = world.isCounter or (require("src.world.gen2.Permissions").isCounter)
+      local d = delta[p.facing] or { 0, 1 }
+      local fx, fy = p.cellX + d[1], p.cellY + d[2]
+      ox, oy = fx, fy
+      if isCounter(world.map:cellCollision(fx, fy)) then
+        ox, oy = p.cellX + d[1] * 2, p.cellY + d[2] * 2
+      end
     end
-    local isCounter = world.isCounter
-    if not isCounter then
-      isCounter = require("src.world.gen2.Permissions").isCounter
-    end
-    local d = delta[p.facing]
-    if not d then return nil end
-    local fx, fy = p.cellX + d[1], p.cellY + d[2]
-    local ox, oy = fx, fy
-    if isCounter(world.map:cellCollision(fx, fy)) then
-      ox, oy = p.cellX + d[1] * 2, p.cellY + d[2] * 2
-    end
+    if not ox then return nil end
     local npc = world:npcAt(ox, oy)
-    if npc and npc.def
-       and (npc.def.scriptKey == "PokecenterNurseScript"
-            or npc.def.sprite == "SPRITE_NURSE") then
-      return npc
+    if npc and (npc.def or npc.spriteId or npc.sprite) then
+      local def = npc.def or {}
+      local spriteName = tostring(def.sprite or npc.spriteId or npc.sprite or ""):upper()
+      local scriptName = tostring(def.scriptKey or def.script or "")
+      local objName = tostring(def.name or ""):upper()
+      if scriptName == "PokecenterNurseScript"
+         or spriteName == "SPRITE_NURSE"
+         or spriteName:find("NURSE") ~= nil
+         or objName:find("NURSE") ~= nil then
+        return npc
+      end
     end
     return nil
   end
@@ -2855,6 +2979,8 @@ return function(mod)
       "src.world.OverworldController",
       "src.world.Player", "src.world.gen2.StepEvents", "src.world.gen2.World",
       "src.world.gen2.Player", "src.world.gen2.Palettes", "src.battle.gen2.Catching",
+      "src.core.gen2.Breeding",
+      "src.ui.TownMap", "src.ui.FlyMenu", "src.world.gen2.FieldMoves",
       "src.core.Game2",
       "src.pokemon.Pokemon", "src.battle.gen2.Mon",
       "src.battle.BattleState", "src.ui." .. "Summary" .. "Menu",
@@ -3924,58 +4050,91 @@ return function(mod)
   -- A-press dispatch (World:interactBody) is intercepted before the script
   -- can start -- the counter-doubled nurse lookup is the pure nurseAt
   -- export -- playing the Pokecenter heal machine animation with no script text.
-  mod.events:on("game.ready", function()
-    if GEN2 then
-      installGen2TmAndHmPatches()
-      local World2 = require("src.world.gen2.World")
-      if World2._qolTogglesQuickNurseInstalled then return end
-      local vanillaInteract = World2.interactBody
-      if not vanillaInteract then return end
-      World2._qolTogglesQuickNurseInstalled = true
-      World2.interactBody = function(self)
-        if get("quick_nurse") then
-          local npc = mod.exports.nurseAt(self)
-          if npc then
-            if self.vm then
-              self.vm.lastTalked = (npc.def and npc.def.index or 0) + 1
+  local function installQuickNurse()
+    local isG2 = GEN2 or detectGen2(mod) or (Game and (Game.isGame2 or Game.generation == 2 or isGen2Version(Game.version)))
+    if isG2 then
+      local ok, World2 = pcall(require, "src.world.gen2.World")
+      if ok and World2 and not World2._qolTogglesQuickNurseInstalled then
+        local vanillaInteract = World2.interactBody
+        if vanillaInteract then
+          World2._qolTogglesQuickNurseInstalled = true
+          World2.interactBody = function(self)
+            if get("quick_nurse") then
+              local npc = mod.exports.nurseAt(self)
+              if npc then
+                if self.vm then
+                  self.vm.lastTalked = (npc.def and npc.def.index or 0) + 1
+                end
+                self.talkNpc = npc
+                if type(npc.facePlayer) == "function" then
+                  npc:facePlayer(self.player)
+                end
+                local save = (self.game and self.game.save) or (Game and Game.save) or self.save
+                if save and save.party then
+                  for _, mon in ipairs(save.party) do
+                    if mon then
+                      mon.hp = mon.maxHp or mon.hp
+                      mon.status = nil
+                      mon.statusTurns = nil
+                      for _, move in ipairs(mon.moves or {}) do
+                        if type(move) == "table" then move.pp = move.maxPp or move.pp end
+                      end
+                    end
+                  end
+                end
+                if type(self.healParty) == "function" then
+                  self:healParty()
+                end
+                if type(self.startHealMachineAnim) == "function" then
+                  if npc then npc.facing = "left" end
+                  self:startHealMachineAnim(0, function()
+                    if npc and type(npc.facePlayer) == "function" then
+                      npc:facePlayer(self.player)
+                    end
+                    mod.exports.turnAround(self.player)
+                    self.talkNpc = nil
+                  end)
+                else
+                  mod.exports.turnAround(self.player)
+                  self.talkNpc = nil
+                end
+                return true
+              end
             end
-            self.talkNpc = npc
-            if type(npc.facePlayer) == "function" then
-              npc:facePlayer(self.player)
-            end
-            if type(self.healParty) == "function" then
-              self:healParty()
-            end
-            if type(self.startHealMachineAnim) == "function" then
-              self:startHealMachineAnim(0, function()
-                mod.exports.turnAround(self.player)
-                self.talkNpc = nil
-              end)
-            else
-              mod.exports.turnAround(self.player)
-              self.talkNpc = nil
-            end
-            return true
+            return vanillaInteract(self)
           end
         end
-        return vanillaInteract(self)
       end
-      return
     end
-    local owHeal = require("src" .. ".world.OverworldController")
-    if owHeal._qolTogglesQuickNurseInstalled then return end
-    local vanillaNurse = owHeal.nurseHeal
-    if not vanillaNurse then return end
-    owHeal._qolTogglesQuickNurseInstalled = true
-    owHeal.nurseHeal = function(self, onDone, npc)
-      if not get("quick_nurse") then
-        return vanillaNurse(self, onDone, npc)
+    local ok, owHeal = pcall(require, "src.world.OverworldController")
+    if ok and owHeal and not owHeal._qolTogglesQuickNurseInstalled then
+      local vanillaNurse = owHeal.nurseHeal
+      if vanillaNurse then
+        owHeal._qolTogglesQuickNurseInstalled = true
+        owHeal.nurseHeal = function(self, onDone, npc)
+          if not get("quick_nurse") then
+            return vanillaNurse(self, onDone, npc)
+          end
+          if self.map and self.map.id == "PEWTER_POKECENTER"
+             and self.pikachuPewterSleepScene then
+            return vanillaNurse(self, onDone, npc)
+          end
+          return mod.exports.quickNurse(self, onDone, npc)
+        end
       end
-      if self.map and self.map.id == "PEWTER_POKECENTER"
-         and self.pikachuPewterSleepScene then
-        return vanillaNurse(self, onDone, npc)
-      end
-      return mod.exports.quickNurse(self, onDone, npc)
+    end
+  end
+
+  installQuickNurse()
+
+  mod.events:on("game.ready", function(ev)
+    if not GEN2 then
+      GEN2 = detectGen2(mod) or (ev and ev.game and (hasGen2Data(ev.game.data) or ev.game.isGame2 or ev.game.generation == 2 or isGen2Version(ev.game.version)))
+    end
+    installQuickNurse()
+    installBadgelessFly()
+    if GEN2 and installGen2TmAndHmPatches then
+      installGen2TmAndHmPatches()
     end
   end)
 
@@ -4018,6 +4177,44 @@ return function(mod)
     local ok, BattleCam = pcall(function() return lib.require("BattleCam") end)
     if ok and BattleCam then mod.exports.installMouseCamLock(BattleCam) end
   end)
+
+  -- INSTANT HATCH (Gen 2): Breeding.step ticks an egg's counter only on the
+  -- $80 phase of wStepCount, so even an egg whose cycles are spent can wait
+  -- most of a further 256 steps for the vanilla footfall that hatches it.
+  -- On the first step with an egg in the party this zeroes that egg and
+  -- reports the same "hatch" Breeding.step reports at its own phase, which
+  -- is all World:countStep needs to run the engine's own hatch script
+  -- (OverworldHatchEgg) -- the animation, the "* came out of its EGG!" text
+  -- and the nickname prompt all stay vanilla.  Only the first egg in party
+  -- order is zeroed, matching doEggStep's one-hatch-per-footfall rule, so a
+  -- party of several eggs hatches one per step.  Idempotent, and exported
+  -- so the headless suite can install it against its own Breeding stub.
+  local function installInstantHatch()
+    local ok, Breeding2 = pcall(require, "src.core.gen2.Breeding")
+    if not (ok and Breeding2 and type(Breeding2.step) == "function") then
+      return
+    end
+    if Breeding2._qolTogglesInstantHatchInstalled then return end
+    Breeding2._qolTogglesInstantHatchInstalled = true
+    local vanillaStep = Breeding2.step
+    Breeding2.step = function(data, save, rng)
+      if get("instant_hatch") and type(save) == "table"
+         and type(save.party) == "table" then
+        for _, mon in ipairs(save.party) do
+          if Breeding2.isEgg(mon) then
+            mon.eggSteps = 0
+            -- the cart's own bookkeeping: wStepCount still advances, and a
+            -- hatch footfall skips DayCareStep, exactly like the vanilla
+            -- path out of doEggStep returning true
+            save.stepCount = ((save.stepCount or 0) + 1) % Breeding2.STEP_CYCLE
+            return "hatch"
+          end
+        end
+      end
+      return vanillaStep(data, save, rng)
+    end
+  end
+  mod.exports.installInstantHatch = installInstantHatch
 
   -- LIGHTS ON / AUTO-REPEL / KEEP MONEY / AUTO CUT: overworld seams,
   -- one wrap per session (hot reload re-runs entry chunks).  Gen 1 wraps
@@ -4190,6 +4387,8 @@ return function(mod)
           return result
         end
       end
+
+      installInstantHatch()
       return
     end
 
@@ -4530,16 +4729,21 @@ return function(mod)
     return enc
   end)
 
-  -- INSTANT FISH: every cast with a candidate group bites immediately --
-  -- the group is uniform-picked instead of run through the rejection
-  -- loop (bite odds size/(size+4)); a map with no group still has
-  -- nothing to catch.  The Old Rod (always-catch) is unaffected.
-  mod.hooks:wrap("encounter.fishing", function(next, rod, mapId, candidates)
-    if get("instant_fish") then
-      local enc = mod.exports.fishBite(candidates)
-      if enc then return enc end
-    end
-    return next(rod, mapId, candidates)
+  -- NO ENCOUNTER DUPES / INSTANT FISH: fishing has its own encounter path,
+  -- so keep it inside the same reroll/state-update loop as walking rolls.
+  -- The group is uniform-picked when INSTANT FISH is on; otherwise the
+  -- engine's fishing roll is preserved.  Gen 2's context is passed through
+  -- unchanged for downstream hooks.
+  mod.hooks:wrap("encounter.fishing", function(next, rod, mapId, candidates, ctx)
+    local enc = mod.exports.avoidDupe(function()
+      if get("instant_fish") then
+        local bite = mod.exports.fishBite(candidates)
+        if bite then return bite end
+      end
+      return next(rod, mapId, candidates, ctx)
+    end, get("no_enc_dupes") and lastEncounterSpecies or nil, 8)
+    if enc then lastEncounterSpecies = enc.species end
+    return enc
   end)
 
   -- RUN (HOLD B): double foot speed while B is held (the movement.speed
@@ -4862,7 +5066,9 @@ return function(mod)
 
   if GEN2 then
     installGen2TmAndHmPatches()
+    installInstantHatch()
   end
+  installBadgelessFly()
   if not GEN2 then
     local ItemEffects = require("src.inventory.ItemEffects")
     if not ItemEffects._qolTogglesUnlimitedTmsInstalled then
@@ -5110,59 +5316,61 @@ return function(mod)
   -- the mark is up -- the only path that runs while a shop list is on the
   -- stack is a real Gen 1 mart purchase. Gold's mart is wrapped separately
   -- through src/ui/gen2/MartMenu with its own buy flow.
-  local ShopMenu = require("src.ui.ShopMenu")
-  local ListMenu = require("src.ui.ListMenu")
-  local Bag = require("src.inventory.Bag")
   if not GEN2 and not Game._qolTogglesBallBonusInstalled then
-    Game._qolTogglesBallBonusInstalled = true
+    local okShop, ShopMenu = pcall(require, "src.ui.ShopMenu")
+    local okList, ListMenu = pcall(require, "src.ui.ListMenu")
+    local okBag, Bag = pcall(require, "src.inventory.Bag")
+    if okShop and ShopMenu and okList and ListMenu and okBag and Bag then
+      Game._qolTogglesBallBonusInstalled = true
 
-    local vanillaShopNew = ShopMenu.new
-    ShopMenu.new = function(game, stock, onQuit)
-      local menu = vanillaShopNew(game, stock, onQuit)
-      for _, item in ipairs(menu.items or {}) do
-        if item.onSelect and item.label == Strings("BUY") then
-          local select = item.onSelect
-          item.onSelect = function()
-            martBuyOpen = true
-            return select()
+      local vanillaShopNew = ShopMenu.new
+      ShopMenu.new = function(game, stock, onQuit)
+        local menu = vanillaShopNew(game, stock, onQuit)
+        for _, item in ipairs(menu.items or {}) do
+          if item.onSelect and item.label == Strings("BUY") then
+            local select = item.onSelect
+            item.onSelect = function()
+              martBuyOpen = true
+              return select()
+            end
           end
         end
+        return menu
       end
-      return menu
-    end
 
-    local vanillaListNew = ListMenu.new
-    ListMenu.new = function(game, title, items, opts)
-      local list = vanillaListNew(game, title, items, opts)
-      if martBuyOpen and list.dialogue and title == "BUY" then
-        local cancel = list.onCancel
-        list.onCancel = function()
-          martBuyOpen = false
-          if cancel then return cancel() end
-        end
-      end
-      return list
-    end
-
-    local vanillaBagAdd = Bag.add
-    Bag.add = function(save, id, qty, data)
-      local ok = vanillaBagAdd(save, id, qty, data)
-      if not ok then return ok end
-      if save == Game.save and martBuyOpen and id == "POKE_BALL"
-         and get("free_great_ball") then
-        local count = mod.save:get("pokeballs_bought") or 0
-        local granted = mod.exports.bonusBalls(count, qty or 1)
-        mod.save:set("pokeballs_bought", count + (qty or 1))
-        if granted > 0 then
-          for _ = 1, granted do
-            vanillaBagAdd(save, "GREAT_BALL", 1, data)
+      local vanillaListNew = ListMenu.new
+      ListMenu.new = function(game, title, items, opts)
+        local list = vanillaListNew(game, title, items, opts)
+        if martBuyOpen and list.dialogue and title == "BUY" then
+          local cancel = list.onCancel
+          list.onCancel = function()
+            martBuyOpen = false
+            if cancel then return cancel() end
           end
-          local TextBox = require("src.render.TextBox")
-          Game.stack:push(TextBox.new(Game,
-            Strings(mod.exports.bonusMessage())))
         end
+        return list
       end
-      return ok
+
+      local vanillaBagAdd = Bag.add
+      Bag.add = function(save, id, qty, data)
+        local ok = vanillaBagAdd(save, id, qty, data)
+        if not ok then return ok end
+        if save == Game.save and martBuyOpen and id == "POKE_BALL"
+           and get("free_great_ball") then
+          local count = mod.save:get("pokeballs_bought") or 0
+          local granted = mod.exports.bonusBalls(count, qty or 1)
+          mod.save:set("pokeballs_bought", count + (qty or 1))
+          if granted > 0 then
+            for _ = 1, granted do
+              vanillaBagAdd(save, "GREAT_BALL", 1, data)
+            end
+            local TextBox = require("src.render.TextBox")
+            Game.stack:push(TextBox.new(Game,
+              Strings(mod.exports.bonusMessage())))
+          end
+        end
+        return ok
+      end
     end
   end
 
@@ -5220,31 +5428,34 @@ return function(mod)
   -- mod manager's own QuantityBox rows (numeric options) are never
   -- touched: only boxes pushed while a mart list sits on the stack.
   -- Gold's MartMenu has its own inline quantity picker and is wrapped above.
-  local QuantityBox = require("src.ui.QuantityBox")
   if not GEN2 and not Game._qolTogglesBulkMartInstalled then
-    Game._qolTogglesBulkMartInstalled = true
+    local okList, ListMenu = pcall(require, "src.ui.ListMenu")
+    local okQty, QuantityBox = pcall(require, "src.ui.QuantityBox")
+    if okList and ListMenu and okQty and QuantityBox then
+      Game._qolTogglesBulkMartInstalled = true
 
-    local vanillaListNew = ListMenu.new
-    ListMenu.new = function(game, title, items, opts)
-      local list = vanillaListNew(game, title, items, opts)
-      if list.dialogue and title == "SELL" then
-        local cancel = list.onCancel
-        list.onCancel = function()
-          martSellOpen = false
-          if cancel then return cancel() end
+      local vanillaListNew = ListMenu.new
+      ListMenu.new = function(game, title, items, opts)
+        local list = vanillaListNew(game, title, items, opts)
+        if list.dialogue and title == "SELL" then
+          local cancel = list.onCancel
+          list.onCancel = function()
+            martSellOpen = false
+            if cancel then return cancel() end
+          end
+          martSellOpen = true
         end
-        martSellOpen = true
+        return list
       end
-      return list
-    end
 
-    local vanillaQtyNew = QuantityBox.new
-    QuantityBox.new = function(game, opts)
-      local box = vanillaQtyNew(game, opts)
-      if (martBuyOpen or martSellOpen) and get("bulk_mart") then
-        box.qty = math.min(10, box.max)
+      local vanillaQtyNew = QuantityBox.new
+      QuantityBox.new = function(game, opts)
+        local box = vanillaQtyNew(game, opts)
+        if (martBuyOpen or martSellOpen) and get("bulk_mart") then
+          box.qty = math.min(10, box.max)
+        end
+        return box
       end
-      return box
     end
   end
 

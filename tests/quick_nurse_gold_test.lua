@@ -18,9 +18,11 @@ local check, eq = S.check, S.eq
 
 local savedVersion = GameVersion.get and GameVersion.get()
 if GameVersion.set then GameVersion.set("gold") end
-local run = T.sdk.loadMod("mods/qol_toggles", {
+local loadRoot = arg and arg[1]
+local run = T.sdk.loadMod(loadRoot and "." or "mods/qol_toggles", {
   data = T.fixtures.fresh(),
   generation = 2,
+  root = loadRoot,
 })
 eq(run.mod and run.mod.state, "loaded", "qol_toggles loads on Gold")
 eq(#run.errors, 0, "qol_toggles has no Gold load errors")

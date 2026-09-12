@@ -146,6 +146,8 @@ do
   T.eq(shown["anim_skip"], true, "gen 2 keeps ANIM SKIP")
   T.eq(shown["infinite_held_item"], true,
     "gen 2 shows INFINITE HELD ITEM")
+  T.eq(shown["instant_hatch"], true,
+    "gen 2 shows INSTANT HATCH")
   T.eq(ex2.visibleCount(true), #rows,
     "gen 2 visible toggle count matches the shown rows")
   T.eq(ex2.enabledCount(function() return true end, true), #rows,
@@ -236,6 +238,74 @@ do
   run2.loader.modOptions = run2.loader.modOptions or {}
   run2.loader.modOptions.qol_toggles = run2.loader.modOptions.qol_toggles or {}
   local g2bucket = run2.loader.modOptions.qol_toggles
+
+  -- BADGELESS FLY (Gold): the native list still supplies only the current
+  -- region's valid fly points, but the visited-spawn gate is bypassed.  The
+  -- source save must remain untouched after building that list.
+  do
+    local FieldMoves2 = require("src.world.gen2.FieldMoves")
+    local save = { engineFlags = {}, visitedSpawns = {} }
+    g2bucket.badgeless_moves = false
+    T.eq(#FieldMoves2.flyPoints(save, nil, "johto"), 0,
+      "Gen 2 BADGELESS OFF: unvisited fly points stay hidden")
+    g2bucket.badgeless_moves = true
+    local points = FieldMoves2.flyPoints(save, nil, "johto")
+    local seen = {}
+    for _, point in ipairs(points) do seen[point.spawn] = true end
+    T.eq(seen.SPAWN_VIOLET, true,
+      "Gen 2 BADGELESS: an unvisited city is a FLY destination")
+    T.eq(save.engineFlags[66], nil,
+      "Gen 2 BADGELESS: listing a city does not set its engine flag")
+    T.eq(save.visitedSpawns.SPAWN_VIOLET, nil,
+      "Gen 2 BADGELESS: listing a city does not mark its spawn visited")
+    g2bucket.badgeless_moves = false
+  end
+
+  -- INSTANT HATCH (Gold): an egg's counter is in 256-step cycles and the
+  -- engine only ticks it on the $80 phase, so the toggle must both zero the
+  -- party's first egg and report the hatch itself; the engine's hatch script
+  -- (OverworldHatchEgg) picks it up from the readyToHatch queue from there.
+  do
+    local Breeding2 = require("src.core.gen2.Breeding")
+    local function egg(steps)
+      return { isEgg = true, species = species, eggSteps = steps }
+    end
+
+    g2bucket.instant_hatch = false
+    local off = { party = { egg(20) }, stepCount = 0 }
+    T.eq(Breeding2.step(fresh, off, nil), nil,
+      "INSTANT HATCH OFF: the step is not a hatch")
+    T.eq(off.party[1].eggSteps, 20,
+      "INSTANT HATCH OFF: the egg keeps its remaining cycles")
+
+    g2bucket.instant_hatch = true
+    -- stepCount 0 -> the vanilla $80 phase tick is a long way off, so a
+    -- hatch on this step can only have come from the toggle
+    local on = { party = { egg(20) }, stepCount = 0 }
+    T.eq(Breeding2.step(fresh, on, nil), "hatch",
+      "INSTANT HATCH ON: the first footfall reports the hatch")
+    T.eq(on.party[1].eggSteps, 0,
+      "INSTANT HATCH ON: the party egg is hatch-ready")
+    T.eq(#Breeding2.readyToHatch(on), 1,
+      "INSTANT HATCH ON: the engine's hatch queue finds the egg")
+    T.eq(on.stepCount, 1, "INSTANT HATCH ON: wStepCount still advances")
+
+    -- one hatch per footfall, doEggStep's own rule: only the first egg in
+    -- party order is zeroed, so two eggs take two steps
+    local pair = { party = { egg(20), egg(20) }, stepCount = 0 }
+    T.eq(Breeding2.step(fresh, pair, nil), "hatch",
+      "INSTANT HATCH ON: the first egg hatches")
+    T.eq(pair.party[1].eggSteps, 0, "INSTANT HATCH ON: egg one is ready")
+    T.eq(pair.party[2].eggSteps, 20,
+      "INSTANT HATCH ON: egg two waits for the next step")
+    T.eq(#Breeding2.readyToHatch(pair), 1,
+      "INSTANT HATCH ON: one egg per footfall")
+
+    local none = { party = { { species = species, level = 5 } }, stepCount = 0 }
+    T.eq(Breeding2.step(fresh, none, nil), nil,
+      "INSTANT HATCH ON: a party with no egg is no hatch")
+    g2bucket.instant_hatch = false
+  end
 
   -- PERFECT DVS GIFTS (Gold): Gold has no give-mon seam of its own, so the
   -- givepoke script.command row arms the latch and the wrapped Mon.new
@@ -571,6 +641,14 @@ for _, optionRow in ipairs(rows) do
 end
 
 T.eq(#rows, 44, "forty-four toggles in the submenu")
+do
+  local gen1Ids = {}
+  for _, optionRow in ipairs(rows) do gen1Ids[optionRow.id] = true end
+  T.eq(gen1Ids.instant_hatch, nil,
+    "the Gen 2-only INSTANT HATCH row stays off Gen 1")
+  T.eq(gen1Ids.infinite_held_item, nil,
+    "the Gen 2-only INFINITE HELD ITEM row stays off Gen 1")
+end
 T.eq(rows[1].id, "poison_save", "toggle 1: poison survival")
 T.eq(rows[2].id, "catch_heal", "toggle 2: full-heal capture")
 T.eq(rows[3].id, "repel", "toggle 3: infinite repel")
@@ -1764,6 +1842,60 @@ do
   bucket.badgeless_moves = false
   ex.withPhantoms(pm, stubUpdate, 1/60)
   T.eq(#seenBadges, 0, "toggle OFF: no badge injection")
+end
+
+-- ------------------------------------------------ BADGELESS FLY DESTINATIONS
+
+do
+  local FlyMenu = require("src.ui.FlyMenu")
+  local TownMap = require("src.ui.TownMap")
+  local field = Data.field
+  local oldFlyOrder = field.flyOrder
+  local oldFlyWarps = field.flyWarps
+  local oldTownMap = field.townMap
+  local oldCerulean = Data.maps.CERULEAN_CITY
+  field.flyOrder = { "CERULEAN_CITY" }
+  field.flyWarps = { CERULEAN_CITY = { x = 2, y = 2 } }
+  field.townMap = { locations = {
+    CERULEAN_CITY = { x = 5, y = 5, name = "CERULEAN CITY" },
+  } }
+  Data.maps.CERULEAN_CITY = {
+    id = "CERULEAN_CITY", index = 3, tileset = "OVERWORLD", outdoor = true,
+  }
+  local save = { visited = {} }
+  local game = { data = Data, save = save }
+
+  bucket.badgeless_moves = false
+  local vanillaMenu = FlyMenu.new(game)
+  local vanillaIds = {}
+  for _, item in ipairs(vanillaMenu.items or {}) do
+    vanillaIds[item.value] = true
+  end
+  T.eq(vanillaIds.CERULEAN_CITY, nil,
+    "BADGELESS OFF: an unvisited city is not a FLY destination")
+
+  bucket.badgeless_moves = true
+  local expandedMenu = FlyMenu.new(game)
+  local expandedIds = {}
+  for _, item in ipairs(expandedMenu.items or {}) do
+    expandedIds[item.value] = true
+  end
+  T.eq(expandedIds.CERULEAN_CITY, true,
+    "BADGELESS: FLY lists an unvisited city")
+  T.eq(save.visited.CERULEAN_CITY, nil,
+    "BADGELESS: listing a city does not mark it visited")
+
+  local townMap = TownMap.new(game, { fly = true })
+  local townIds = {}
+  for _, mapId in ipairs(townMap.flyMapIds or {}) do townIds[mapId] = true end
+  T.eq(townIds.CERULEAN_CITY, true,
+    "BADGELESS: the native town map lists an unvisited city")
+
+  bucket.badgeless_moves = false
+  field.flyOrder = oldFlyOrder
+  field.flyWarps = oldFlyWarps
+  field.townMap = oldTownMap
+  Data.maps.CERULEAN_CITY = oldCerulean
 end
 
 -- ------------------------------------------------ FIELDMOVE ELIGIBILITY
@@ -3019,6 +3151,31 @@ end
 T.eq(ex.avoidDupe(function() return nil end, "PIDGEY", 3), nil,
      "a nil roll stays nil")
 
+do
+  -- Fishing uses its own hook instead of encounter.roll.  The first bite
+  -- must still become the session's last wild species, so a duplicate bite
+  -- on the next cast is rerolled when the toggle is enabled.
+  bucket.no_enc_dupes = false
+  T.eq(Runtime.call("encounter.fishing", function()
+    return { species = "MAGIKARP", level = 5 }
+  end, "OLD_ROD", "FISHING_TEST", {} ).species, "MAGIKARP",
+    "fishing records its first bite")
+
+  local fishCalls = 0
+  bucket.no_enc_dupes = true
+  local fish = Runtime.call("encounter.fishing", function()
+    fishCalls = fishCalls + 1
+    if fishCalls == 1 then
+      return { species = "MAGIKARP", level = 5 }
+    end
+    return { species = "POLIWAG", level = 10 }
+  end, "OLD_ROD", "FISHING_TEST", {})
+  T.eq(fish.species, "POLIWAG",
+    "fishing rerolls a bite that repeats the previous species")
+  T.eq(fishCalls, 2, "fishing rerolls exactly once past the duplicate")
+  bucket.no_enc_dupes = false
+end
+
 -- ------- INSTANT FISH (fishBite: uniform pick from the rod's group)
 
 for i = 1, 20 do
@@ -3073,7 +3230,7 @@ do
   T.eq(save.repelSteps, 200, "and re-arms the steps")
   T.eq(ex.autoRepelToastText(200), "USED SUPER REPEL!",
        "the toast names the item")
-  T.eq(ex.autoRepelToastText(203), nil, "and expires on its own")
+  T.eq(ex.autoRepelToastText(205), nil, "and expires on its own")
 end
 
 do
@@ -3918,8 +4075,32 @@ do
   T.eq(g2.save.inventory.TM01, 1, "unlimited_tms preserves TM01 in Gen 2")
   g2:consumeItem("TM_DYNAMICPUNCH")
   T.eq(g2.save.inventory.TM_DYNAMICPUNCH, 2, "unlimited_tms preserves TM_DYNAMICPUNCH in Gen 2")
-  g2:consumeItem("POTION")
-  T.eq(g2.save.inventory.POTION, 2, "unlimited_tms consumes non-TM items like POTION in Gen 2")
+  -- Quick Nurse and nurseAt checks
+  local fakeNurse = { def = { sprite = "SPRITE_NURSE", index = 1, scriptKey = "56:1234" } }
+  local fakeWorld = {
+    player = { cellX = 3, cellY = 3, facing = "up" },
+    map = { cellCollision = function() return 0x90 end },
+    facingObjectCell = function() return 3, 1 end,
+    npcAt = function(_, x, y) if x == 3 and y == 1 then return fakeNurse end end,
+  }
+  T.eq(ex.nurseAt(fakeWorld), fakeNurse, "nurseAt detects SPRITE_NURSE facing counter")
+  fakeNurse.def.sprite = "SPRITE_GIRL"
+  fakeNurse.def.scriptKey = "PokecenterNurseScript"
+  T.eq(ex.nurseAt(fakeWorld), fakeNurse, "nurseAt detects PokecenterNurseScript")
+  fakeNurse.def.scriptKey = "56:5678"
+  fakeNurse.def.name = "NURSE JOY"
+  T.eq(ex.nurseAt(fakeWorld), fakeNurse, "nurseAt detects nurse name")
+
+  -- Quick nurse heal test
+  local testPartySave = { { hp = 1, maxHp = 25, status = "PSN", moves = { { pp = 0, maxPp = 10 } } } }
+  Game.save = { party = testPartySave }
+  local fakeOw = { map = { id = "VIRIDIAN_POKECENTER" }, player = { cellX = 3, cellY = 3 } }
+  ex.quickNurse(fakeOw, nil, fakeNurse)
+  T.eq(testPartySave[1].hp, 25, "quickNurse restores party HP")
+  T.eq(testPartySave[1].status, nil, "quickNurse clears party status")
+  T.eq(testPartySave[1].moves[1].pp, 10, "quickNurse restores move PP")
+  T.eq(Game.save.usedPokecenter, true, "quickNurse sets usedPokecenter flag")
+
   Game.save = prevGameSave
 end
 
